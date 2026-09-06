@@ -364,6 +364,8 @@
     ctx.fillText('1万日散歩するやつ', MARGIN, cursorY);
     cursorY += 39 + 20;
 
+    const dayCountBlockTop = cursorY;
+    const dayCountBlockHeight = 175;
     const dayLineBaseline = cursorY + 160;
     ctx.textBaseline = 'alphabetic';
     let cx = MARGIN;
@@ -378,23 +380,38 @@
     ctx.fillText('日目', cx, dayLineBaseline);
     cx += ctx.measureText('日目').width;
 
-    ctx.fillStyle = DARK;
     ctx.fillText(' / 10000', cx, dayLineBaseline);
-    cursorY += 175 + 10;
+
+    // streak / longest, stacked to the right of the day count
+    const streakFontSize = 50;
+    const streakGap = 14;
+    const streakBlockHeight = streakFontSize * 2 + streakGap;
+    const streakBlockTop = dayCountBlockTop + (dayCountBlockHeight - streakBlockHeight) / 2;
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'right';
+    ctx.font = `${streakFontSize}px 'DotGothic16'`;
+    ctx.fillStyle = BRIGHT;
+    ctx.fillText(`連続 ${derived.streak}日`, W - MARGIN, streakBlockTop);
+    ctx.fillText(`最長 ${derived.longest}日`, W - MARGIN, streakBlockTop + streakFontSize + streakGap);
+    ctx.textAlign = 'left';
+
+    cursorY += dayCountBlockHeight + 10;
 
     ctx.textBaseline = 'top';
     ctx.font = "34px 'DotGothic16'";
-    ctx.fillStyle = DARK;
+    ctx.fillStyle = BRIGHT;
     ctx.fillText(`${dotDate(data.startDate)} → ${dotDate(derived.today)}`, MARGIN, cursorY);
     cursorY += 39 + 34;
 
     const gridY = cursorY;
-    const smallGridX = MARGIN;
-    const small = drawSmallGrid(ctx, smallGridX, gridY, derived.cardNumber - 1);
-
     const largeGridWidth = 548;
+    const largeGridHeight = 548;
     const largeGridX = W - MARGIN - largeGridWidth;
     const large = drawLargeGrid(ctx, largeGridX, gridY, derived.filledInCard);
+
+    const smallGridX = MARGIN;
+    const smallGridY = gridY + Math.round(largeGridHeight * 0.25);
+    const small = drawSmallGrid(ctx, smallGridX, smallGridY, derived.cardNumber - 1);
 
     if (small.currentCellRect) {
       ctx.strokeStyle = DARK;
@@ -409,30 +426,13 @@
       ctx.stroke();
     }
 
-    cursorY = gridY + large.height + 20;
+    cursorY = gridY + large.height + 34;
     ctx.font = "34px 'DotGothic16'";
     ctx.textAlign = 'left';
-    ctx.fillStyle = DARK;
+    ctx.fillStyle = BRIGHT;
     ctx.fillText('全100枚 = 1万日', MARGIN, cursorY);
     ctx.textAlign = 'right';
-    ctx.fillStyle = BRIGHT;
     ctx.fillText(`${derived.cardNumber}枚目 = 100日`, W - MARGIN, cursorY);
-    cursorY += 39 + 20;
-
-    ctx.strokeStyle = UNFILLED_BORDER;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(MARGIN, cursorY);
-    ctx.lineTo(W - MARGIN, cursorY);
-    ctx.stroke();
-    cursorY += 24;
-
-    ctx.font = "38px 'DotGothic16'";
-    ctx.fillStyle = BRIGHT;
-    ctx.textAlign = 'left';
-    ctx.fillText(`連続 ${derived.streak}日`, MARGIN, cursorY);
-    ctx.textAlign = 'right';
-    ctx.fillText(`最長 ${derived.longest}日`, W - MARGIN, cursorY);
 
     return derived;
   }
