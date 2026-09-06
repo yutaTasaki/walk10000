@@ -818,25 +818,27 @@
     ctx.fillStyle = BRIGHT;
     ctx.fillText('DAYS / 10000', MARGIN, countdownTop + 212 + 12);
 
-    // right column, under "1 DAY": today's steps/km on one line, then the
-    // WAKE -> WALK mood emoji when both are set - back where it was, with
-    // steps/km now combined onto a single slash-separated line
+    // right column, under "1 DAY": today's steps then distance (meters, one
+    // line each, matching the "DAYS / 10000" size), then the WAKE -> WALK
+    // mood emoji when both are set for today
     const todayStats = data.dailyStats[derived.today] || {};
     const todaySteps = todayStats.steps != null ? todayStats.steps : 0;
-    const todayKm = ((todayStats.distanceM != null ? todayStats.distanceM : 0) / 1000).toFixed(1);
-    const todayFontSize = 44;
+    const todayDistanceM = todayStats.distanceM != null ? todayStats.distanceM : 0;
+    const todayFontSize = 60;
+    const todayGap = 10;
     const todayBlockTop = largeLabelTop + 46 + 25;
     ctx.textBaseline = 'top';
     ctx.textAlign = 'right';
     ctx.font = `${todayFontSize}px 'DotGothic16'`;
     ctx.fillStyle = BRIGHT;
-    ctx.fillText(`${todaySteps} steps / ${todayKm} km`, W - MARGIN, todayBlockTop);
+    ctx.fillText(`${todaySteps} steps`, W - MARGIN, todayBlockTop);
+    ctx.fillText(`${todayDistanceM} m`, W - MARGIN, todayBlockTop + todayFontSize + todayGap);
     ctx.textAlign = 'left';
 
     if (todayStats.wakeMood != null && todayStats.afterMood != null) {
-      const emojiSize = 40;
-      const wordSize = 24;
-      const rowY = todayBlockTop + todayFontSize + 14;
+      const emojiSize = 48;
+      const wordSize = 28;
+      const rowY = todayBlockTop + (todayFontSize + todayGap) * 2 + 14;
       const emojiMidY = rowY + emojiSize / 2;
       const emoji1 = MOOD_EMOJI[todayStats.wakeMood];
       const emoji2 = MOOD_EMOJI[todayStats.afterMood];
@@ -924,10 +926,17 @@
   // immediately on click with zero work in between - generating the PNG in
   // the click handler risked the synchronous encoding itself eating enough
   // of iOS Safari's transient user-activation window that share() would be
-  // silently rejected.
+  // silently rejected. The old blob is discarded (and the button disabled)
+  // the instant any data change triggers a re-render, so 共有 can never
+  // fire with a stale image while the fresh one is still encoding.
   let sharePngBlob = null;
   function regenerateShareBlob() {
-    canvas.toBlob((blob) => { sharePngBlob = blob; }, 'image/png');
+    sharePngBlob = null;
+    btnShare.disabled = true;
+    canvas.toBlob((blob) => {
+      sharePngBlob = blob;
+      btnShare.disabled = false;
+    }, 'image/png');
   }
 
   function render() {
@@ -995,6 +1004,7 @@
     const steps = todayStepsInput.value === '' ? null : parseInt(todayStepsInput.value, 10);
     const distanceM = todayDistanceInput.value === '' ? null : parseFloat(todayDistanceInput.value);
     setDailyStats(todayStr(), steps, distanceM);
+    render();
     alert('保存しました');
   });
 
