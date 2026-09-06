@@ -731,26 +731,66 @@
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
 
-    // header row: date range only, top-right; card-complete adds a small
-    // "CARD N COMPLETE" note on the left of this same row
+    // header row: today's steps/km (left) + date range (right); card-complete
+    // note replaces the steps/km slot on the left (rare, one day only)
     const headerFontSize = 26;
     ctx.font = `${headerFontSize}px 'DotGothic16'`;
     ctx.fillStyle = BRIGHT;
     ctx.textAlign = 'right';
     ctx.fillText(`${dotDate(data.startDate)} → ${dotDate(derived.today)}`, W - MARGIN, MARGIN);
     ctx.textAlign = 'left';
+
+    const todayStats = data.dailyStats[derived.today] || {};
+    const todaySteps = todayStats.steps != null ? todayStats.steps : 0;
+    const todayKm = ((todayStats.distanceM != null ? todayStats.distanceM : 0) / 1000).toFixed(1);
     if (isNormalMilestone) {
       ctx.fillText(`CARD ${milestone.cardNumber} COMPLETE`, MARGIN, MARGIN);
+    } else {
+      ctx.fillText(`${todaySteps} steps / ${todayKm} km`, MARGIN, MARGIN);
+    }
+    let headerBottom = MARGIN + 30;
+
+    // WAKE -> WALK mood emoji, one compact line under the steps/km, only
+    // when both are set for today
+    if (todayStats.wakeMood != null && todayStats.afterMood != null) {
+      const emojiSize = 32;
+      const wordSize = 22;
+      const rowY = headerBottom + 10;
+      const emojiMidY = rowY + emojiSize / 2;
+      const emoji1 = MOOD_EMOJI[todayStats.wakeMood];
+      const emoji2 = MOOD_EMOJI[todayStats.afterMood];
+
+      ctx.textBaseline = 'middle';
+      let ex = MARGIN;
+      ctx.font = `${wordSize}px 'DotGothic16'`;
+      ctx.fillStyle = DARK;
+      ctx.fillText('WAKE ', ex, emojiMidY);
+      ex += ctx.measureText('WAKE ').width;
+      ctx.font = `${emojiSize}px 'Apple Color Emoji'`;
+      ctx.fillText(emoji1, ex, emojiMidY);
+      ex += ctx.measureText(emoji1).width;
+      ctx.font = `${wordSize}px 'DotGothic16'`;
+      ctx.fillStyle = BRIGHT;
+      ctx.fillText(' → WALK ', ex, emojiMidY);
+      ex += ctx.measureText(' → WALK ').width;
+      ctx.font = `${emojiSize}px 'Apple Color Emoji'`;
+      ctx.fillText(emoji2, ex, emojiMidY);
+
+      ctx.textBaseline = 'top';
+      headerBottom = rowY + emojiSize;
     }
 
-    // grids sit right below the header; same relative small/large/funnel
-    // layout as before, just moved to the top of the card
-    const gridY = MARGIN + 30 + 20;
-    const largeGridLeft = W - MARGIN - 588;
+    // grids: same relative small/large/funnel layout as before, but the
+    // small grid's offset is chosen so both grids now end at the same
+    // bottom edge instead of the small one finishing higher up
+    const gridY = headerBottom + 20;
+    const largeGridWidth = 588, largeGridHeight = 588;
+    const largeGridLeft = W - MARGIN - largeGridWidth;
     const large = drawLargeGrid(ctx, largeGridLeft, gridY, derived.filledInCard, 48, 12, largeFillColor, UNFILLED_BORDER);
 
     const smallGridX = MARGIN;
-    const smallGridY = gridY + Math.round(large.height * 0.25);
+    const smallGridHeight = 352;
+    const smallGridY = gridY + (largeGridHeight - smallGridHeight);
     const small = drawSmallGrid(ctx, smallGridX, smallGridY, derived.cardNumber - 1, 28, 8, smallFillColor, FUTURE);
 
     if (small.currentCellRect) {
@@ -766,8 +806,11 @@
       ctx.stroke();
     }
 
-    // callouts: a leader line from one block of each grid to what it represents
-    const calloutLineLen = 16;
+    // callouts: a leader line from one block of each grid to what it
+    // represents - brighter/thicker than the funnel lines so they read as
+    // a distinct "this block = X" pointer rather than blending into the
+    // zoom-lens lines above them
+    const calloutLineLen = 24;
     const calloutGap = 10;
     ctx.font = "40px 'DotGothic16'";
     ctx.textBaseline = 'top';
@@ -776,8 +819,8 @@
 
     const smallLineX = smallGridX + small.cellSize / 2;
     const smallLineTop = smallGridY + small.height;
-    ctx.strokeStyle = DARK;
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = BRIGHT;
+    ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(smallLineX, smallLineTop);
     ctx.lineTo(smallLineX, smallLineTop + calloutLineLen);
@@ -787,85 +830,35 @@
 
     const largeLineX = largeGridLeft + 48 / 2;
     const largeLineTop = gridY + large.height;
-    ctx.strokeStyle = DARK;
+    ctx.strokeStyle = BRIGHT;
+    ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(largeLineX, largeLineTop);
     ctx.lineTo(largeLineX, largeLineTop + calloutLineLen);
     ctx.stroke();
-    ctx.fillStyle = BRIGHT;
     const largeLabelTop = largeLineTop + calloutLineLen + calloutGap;
     ctx.fillText('1 DAY', largeGridLeft, largeLabelTop);
 
-    // left column, under the small grid's "100 DAYS" tick: the day count,
-    // digit size unchanged from before, now on its own line above "DAYS / 10000"
-    const dayCountBlockTop = smallLabelTop + 46 + 20;
-    const dayCountBlockHeight = 175;
-    const dayLineBaseline = dayCountBlockTop + 160;
+    // the countdown is the single most important number, so it gets its own
+    // centered, full-width line below everything else
+    const countdownTop = Math.max(smallLabelTop, largeLabelTop) + 46 + 20;
+    const countdownBaseline = countdownTop + 160;
     ctx.textBaseline = 'alphabetic';
+    const nText = String(derived.n);
+    ctx.font = "165px 'DotGothic16'";
+    const digitWidth = ctx.measureText(nText).width;
+    ctx.font = "50px 'DotGothic16'";
+    const restText = ' DAYS / 10000';
+    const restWidth = ctx.measureText(restText).width;
+    let countdownX = (W - (digitWidth + restWidth)) / 2;
     ctx.textAlign = 'left';
     ctx.font = "165px 'DotGothic16'";
     ctx.fillStyle = digitColor;
-    ctx.fillText(String(derived.n), MARGIN, dayLineBaseline);
-
-    ctx.textBaseline = 'top';
+    ctx.fillText(nText, countdownX, countdownBaseline);
+    countdownX += digitWidth;
     ctx.font = "50px 'DotGothic16'";
     ctx.fillStyle = BRIGHT;
-    ctx.fillText('DAYS / 10000', MARGIN, dayCountBlockTop + dayCountBlockHeight + 10);
-
-    // right column, under the large grid's "1 DAY" tick: today's steps/km,
-    // then the WAKE -> WALK mood emoji when both are set for today
-    const todayStats = data.dailyStats[derived.today] || {};
-    const todaySteps = todayStats.steps != null ? todayStats.steps : 0;
-    const todayKm = ((todayStats.distanceM != null ? todayStats.distanceM : 0) / 1000).toFixed(1);
-    const todayFontSize = 52;
-    const todayGap = 12;
-    const todayBlockTop = largeLabelTop + 46 + 25;
-    ctx.textBaseline = 'top';
-    ctx.textAlign = 'right';
-    ctx.font = `${todayFontSize}px 'DotGothic16'`;
-    ctx.fillStyle = BRIGHT;
-    ctx.fillText(`${todaySteps} steps`, W - MARGIN, todayBlockTop);
-    ctx.fillText(`${todayKm} km`, W - MARGIN, todayBlockTop + todayFontSize + todayGap);
-    ctx.textAlign = 'left';
-
-    if (todayStats.wakeMood != null && todayStats.afterMood != null) {
-      const labelSize = 22;
-      const emojiSize = todayFontSize;
-      const arrowText = ' → ';
-
-      const labelY = todayBlockTop + todayFontSize * 2 + todayGap + 10;
-      ctx.textBaseline = 'top';
-      ctx.textAlign = 'right';
-      ctx.font = `${labelSize}px 'DotGothic16'`;
-      ctx.fillStyle = DARK;
-      ctx.fillText('WAKE → WALK', W - MARGIN, labelY);
-
-      const emoji1 = MOOD_EMOJI[todayStats.wakeMood];
-      const emoji2 = MOOD_EMOJI[todayStats.afterMood];
-      ctx.font = `${emojiSize}px 'Apple Color Emoji'`;
-      const w1 = ctx.measureText(emoji1).width;
-      const w2 = ctx.measureText(emoji2).width;
-      ctx.font = "40px 'DotGothic16'";
-      const wArrow = ctx.measureText(arrowText).width;
-
-      const emojiRowTop = labelY + labelSize + 8;
-      const emojiMidY = emojiRowTop + emojiSize / 2;
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      let ex = W - MARGIN - (w1 + wArrow + w2);
-      ctx.font = `${emojiSize}px 'Apple Color Emoji'`;
-      ctx.fillText(emoji1, ex, emojiMidY);
-      ex += w1;
-      ctx.font = "40px 'DotGothic16'";
-      ctx.fillStyle = BRIGHT;
-      ctx.fillText(arrowText, ex, emojiMidY);
-      ex += wArrow;
-      ctx.font = `${emojiSize}px 'Apple Color Emoji'`;
-      ctx.fillText(emoji2, ex, emojiMidY);
-
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-    }
+    ctx.fillText(restText, countdownX, countdownBaseline);
 
     return derived;
   }
