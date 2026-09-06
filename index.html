@@ -104,9 +104,24 @@
   .statRow {
     display: flex;
     justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
     font-size: 20px;
   }
-  .statRow .label { color: var(--dark); }
+  .statRow .label {
+    color: var(--dark);
+    flex-shrink: 0;
+  }
+  .statRow .value {
+    text-align: right;
+    white-space: nowrap;
+  }
+  #reviewPanel h3 {
+    margin: 0;
+    font-size: 16px;
+    color: var(--bright);
+    font-weight: normal;
+  }
   .field {
     display: flex;
     flex-direction: column;
@@ -171,10 +186,14 @@
   <div id="reviewPanel">
     <h2 style="margin:0;">振り返り</h2>
 
-    <div class="statRow"><span class="label">直近7日</span><span id="review7"></span></div>
-    <div class="statRow"><span class="label">直近30日</span><span id="review30"></span></div>
-    <div class="statRow"><span class="label">直近7日の歩数/距離</span><span id="reviewStats7"></span></div>
-    <div class="statRow"><span class="label">直近30日の歩数/距離</span><span id="reviewStats30"></span></div>
+    <div class="statRow"><span class="label">7日</span><span class="value" id="review7"></span></div>
+    <div class="statRow"><span class="label">30日</span><span class="value" id="review30"></span></div>
+
+    <hr>
+
+    <h3>歩数 / 距離</h3>
+    <div class="statRow"><span class="label">7日</span><span class="value" id="reviewStats7"></span></div>
+    <div class="statRow"><span class="label">30日</span><span class="value" id="reviewStats30"></span></div>
 
     <hr>
 
@@ -831,10 +850,22 @@
   const reviewLink = document.getElementById('reviewLink');
   const btnCloseReview = document.getElementById('btnCloseReview');
 
+  function daysSinceStart() {
+    return Math.round((parseDateStr(todayStr()) - parseDateStr(data.startDate)) / 86400000) + 1;
+  }
+
   function formatRecent(days) {
+    const dayEl = document.getElementById(`review${days}`);
+    const statsEl = document.getElementById(`reviewStats${days}`);
+    if (daysSinceStart() < days) {
+      const msg = `記録${days}日目から表示`;
+      dayEl.textContent = msg;
+      statsEl.textContent = msg;
+      return;
+    }
     const s = computeRecentStats(days);
-    document.getElementById(`review${days}`).textContent = `${s.walked}/${days}日`;
-    document.getElementById(`reviewStats${days}`).textContent =
+    dayEl.textContent = `${days}日中${s.walked}日`;
+    statsEl.textContent =
       s.steps || s.distanceKm ? `${s.steps} steps / ${s.distanceKm.toFixed(1)} km` : '記録なし';
   }
 
