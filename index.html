@@ -78,6 +78,13 @@
     border: none;
     padding: 4px;
   }
+  #syncStatus {
+    text-align: center;
+    font-size: 12px;
+    color: var(--dark);
+  }
+  #syncStatus.synced { color: var(--bright); }
+  #syncStatus.error { color: #ff4444; }
   #settingsPanel {
     display: none;
     flex-direction: column;
@@ -149,11 +156,21 @@
     </div>
 
     <button id="btnShare" class="primary">Xで投稿</button>
+    <div id="syncStatus">-</div>
     <button id="settingsLink">設定</button>
   </div>
 
   <div id="settingsPanel">
     <h2 style="margin:0;">設定</h2>
+
+    <div class="field">
+      <h3>GitHubトークン</h3>
+      <p class="note">機種変更・バックアップ用。手順はwalk10000-dataリポジトリのREADMEを参照。</p>
+      <input type="password" id="ghTokenInput" placeholder="github_pat_...">
+      <button id="btnSaveGhToken">保存</button>
+    </div>
+
+    <hr>
 
     <div class="field">
       <h3>開始日の変更</h3>
@@ -227,6 +244,11 @@
   const DARK = '#1E7A0F';
   const UNFILLED_BORDER = '#145A0A';
   const FUTURE = '#0B2A05';
+
+  const GH_TOKEN_KEY = 'walk10000_ghToken';
+  const GITHUB_OWNER = 'yutaTasaki';
+  const GITHUB_REPO = 'walk10000-data';
+  const GITHUB_PATH = 'data.json';
 
   // Auto-update check: GitHub Pages caches index.html for ~10 minutes, and an
   // iOS home-screen web app often just resumes a suspended page instead of
@@ -315,6 +337,119 @@
 
   function saveData(data) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    scheduleSync();
+  }
+
+  // --- GitHub backup sync -------------------------------------------------
+  // Stores data.json in a private repo (walk10000-data) via the Contents API.
+  // The token lives only in localStorage, never in this file.
+
+  function getGhToken() {
+    return localStorage.getItem(GH_TOKEN_KEY) || '';
+  }
+
+  function utf8ToBase64(str) {
+    return btoa(unescape(encodeURIComponent(str)));
+  }
+
+  function base64ToUtf8(b64) {
+    return decodeURIComponent(escape(atob(b64.replace(/\n/g, ''))));
+  }
+
+  function ghHeaders(token) {
+    return { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' };
+  }
+
+  async function ghGetFile(token) {
+    const res = await fetch(
+      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_PATH}`,
+      { headers: ghHeaders(token), cache: 'no-store' }
+    );
+    if (res.status === 404) return { data: null, sha: null };
+    if (!res.ok) throw new Error('GitHub GET failed: ' + res.status);
+    const json = await res.json();
+    const parsed = JSON.parse(base64ToUtf8(json.content));
+    return { data: parsed, sha: json.sha };
+  }
+
+  async function ghPutFile(token, newData, sha) {
+    const body = {
+      message: `walk10000: ${newData.walkedDates.length} days`,
+      content: utf8ToBase64(JSON.stringify(newData, null, 2)),
+    };
+    if (sha) body.sha = sha;
+    const res = await fetch(
+      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${GITHUB_PATH}`,
+      { method: 'PUT', headers: ghHeaders(token), body: JSON.stringify(body) }
+    );
+    if (!res.ok) throw new Error('GitHub PUT failed: ' + res.status);
+    return res.json();
+  }
+
+  const syncStatusEl = document.getElementById('syncStatus');
+  function setSyncStatus(state) {
+    syncStatusEl.className = state;
+    syncStatusEl.textContent =
+      state === 'synced' ? '同期済み' :
+      state === 'error' ? '同期エラー' :
+      state === 'syncing' ? '同期中…' :
+      state === 'off' ? 'GitHub同期オフ' :
+      '未同期';
+  }
+  setSyncStatus(getGhToken() ? 'unsynced' : 'off');
+
+  let syncDebounceTimer = null;
+  function scheduleSync() {
+    if (!getGhToken()) return;
+    if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
+    setSyncStatus('unsynced');
+    syncDebounceTimer = setTimeout(syncNow, 800);
+  }
+
+  // Fetches the remote file once, then either pulls it in (if it has more
+  // days than this device - covers both the multi-device and fresh-restore
+  // cases) or pushes this device's data up. Also serves as the retry for a
+  // push that failed on a previous run, since it's called on every startup.
+  async function syncNow() {
+    const token = getGhToken();
+    if (!token) return;
+    setSyncStatus('syncing');
+    try {
+      const remote = await ghGetFile(token);
+      if (remote.data && Array.isArray(remote.data.walkedDates) &&
+          remote.data.walkedDates.length > data.walkedDates.length) {
+        const localCount = data.walkedDates.length;
+        data = normalizeData(remote.data);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        render();
+        setSyncStatus('synced');
+        alert(`GitHub上のデータ（${data.walkedDates.length}日分）の方が新しいため、書き込みを中止してこちらを取り込みました（この端末は${localCount}日分でした）。`);
+        return;
+      }
+      await ghPutFile(token, data, remote.sha);
+      setSyncStatus('synced');
+    } catch (e) {
+      setSyncStatus('error');
+    }
+  }
+
+  // For actions the user has already explicitly confirmed will overwrite
+  // existing data (initial setup, import, delete-all): push regardless of
+  // the day-count safety check, which would otherwise treat an intentional
+  // reduction (e.g. restoring an older backup via import) as remote being
+  // ahead and silently pull it back in, undoing what the user just did.
+  async function forcePush() {
+    const token = getGhToken();
+    if (!token) return;
+    if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
+    setSyncStatus('syncing');
+    try {
+      const remote = await ghGetFile(token);
+      await ghPutFile(token, data, remote.sha);
+      setSyncStatus('synced');
+    } catch (e) {
+      setSyncStatus('error');
+    }
   }
 
   let data = loadData();
@@ -625,6 +760,7 @@
   const statsDateInput = document.getElementById('statsDateInput');
   const statsStepsInput = document.getElementById('statsStepsInput');
   const statsDistanceInput = document.getElementById('statsDistanceInput');
+  const ghTokenInput = document.getElementById('ghTokenInput');
 
   function loadStatsFormFor(dateStr) {
     const stats = data.dailyStats[dateStr] || {};
@@ -637,6 +773,7 @@
     bestStreakInput.value = computeDerived().longest;
     statsDateInput.value = todayStr();
     loadStatsFormFor(todayStr());
+    ghTokenInput.value = getGhToken();
     app.classList.add('settingsOpen');
     settingsPanel.classList.add('open');
   }
@@ -647,6 +784,19 @@
   }
   settingsLink.addEventListener('click', openSettings);
   btnCloseSettings.addEventListener('click', closeSettings);
+
+  document.getElementById('btnSaveGhToken').addEventListener('click', () => {
+    const v = ghTokenInput.value.trim();
+    if (v) {
+      localStorage.setItem(GH_TOKEN_KEY, v);
+      alert('保存しました');
+      syncNow();
+    } else {
+      localStorage.removeItem(GH_TOKEN_KEY);
+      setSyncStatus('off');
+      alert('保存しました');
+    }
+  });
 
   statsDateInput.addEventListener('change', () => {
     if (statsDateInput.value) loadStatsFormFor(statsDateInput.value);
@@ -673,7 +823,7 @@
     alert('開始日を保存しました');
   });
 
-  document.getElementById('btnInitialSetup').addEventListener('click', () => {
+  document.getElementById('btnInitialSetup').addEventListener('click', async () => {
     const countInput = document.getElementById('initialCountInput');
     const count = parseInt(countInput.value, 10);
     if (!Number.isFinite(count) || count < 0) {
@@ -689,6 +839,7 @@
     }
     data.walkedDates = dates;
     saveData(data);
+    await forcePush();
     alert('登録しました');
   });
 
@@ -721,7 +872,7 @@
     }
   });
 
-  document.getElementById('btnImport').addEventListener('click', () => {
+  document.getElementById('btnImport').addEventListener('click', async () => {
     const raw = document.getElementById('importArea').value;
     try {
       const parsed = JSON.parse(raw);
@@ -730,17 +881,19 @@
       }
       data = normalizeData(parsed);
       saveData(data);
+      await forcePush();
       alert('インポートしました');
     } catch (e) {
       alert('JSONの読み込みに失敗しました');
     }
   });
 
-  document.getElementById('btnDeleteAll').addEventListener('click', () => {
+  document.getElementById('btnDeleteAll').addEventListener('click', async () => {
     if (!confirm('全データを削除します。よろしいですか？')) return;
-    if (!confirm('本当に削除しますか？この操作は取り消せません。')) return;
+    if (!confirm('本当に削除しますか？この操作は取り消せません（GitHub同期がオンの場合、バックアップ側も空になります）。')) return;
     localStorage.removeItem(STORAGE_KEY);
     data = defaultData();
+    await forcePush();
     alert('削除しました');
   });
 
@@ -748,6 +901,10 @@
     document.fonts.ready.then(render);
   }
   render();
+  syncNow();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') syncNow();
+  });
 })();
 </script>
 </body>
