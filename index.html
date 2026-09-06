@@ -165,6 +165,15 @@
     <hr>
 
     <div class="field">
+      <h3>最長連続の手動設定</h3>
+      <p class="note">実データから計算した最長連続より大きい場合だけ有効になります（記録が追いつくと自動的に上書きされます）。</p>
+      <input type="number" id="bestStreakInput" min="0" placeholder="最長連続（日）">
+      <button id="btnSaveBestStreak">保存</button>
+    </div>
+
+    <hr>
+
+    <div class="field">
       <h3>データのエクスポート</h3>
       <button id="btnExport">表示</button>
       <textarea id="exportArea" readonly hidden></textarea>
@@ -269,6 +278,7 @@
       longest = Math.max(longest, current);
       prev = d;
     }
+    longest = Math.max(longest, data.bestStreakOverride || 0);
 
     const today = todayStr();
     const yesterday = addDays(today, -1);
@@ -498,9 +508,11 @@
   const settingsLink = document.getElementById('settingsLink');
   const btnCloseSettings = document.getElementById('btnCloseSettings');
   const startDateInput = document.getElementById('startDateInput');
+  const bestStreakInput = document.getElementById('bestStreakInput');
 
   function openSettings() {
     startDateInput.value = data.startDate;
+    bestStreakInput.value = computeDerived().longest;
     app.classList.add('settingsOpen');
     settingsPanel.classList.add('open');
   }
@@ -537,6 +549,18 @@
     data.walkedDates = dates;
     saveData(data);
     alert('登録しました');
+  });
+
+  document.getElementById('btnSaveBestStreak').addEventListener('click', () => {
+    const v = parseInt(bestStreakInput.value, 10);
+    if (!Number.isFinite(v) || v < 0) {
+      alert('正しい日数を入力してください');
+      return;
+    }
+    data.bestStreakOverride = v;
+    saveData(data);
+    bestStreakInput.value = computeDerived().longest;
+    alert('保存しました');
   });
 
   const exportArea = document.getElementById('exportArea');
