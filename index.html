@@ -424,17 +424,20 @@
 
     ctx.fillText(' / 10000', cx, dayLineBaseline);
 
-    // streak / longest, stacked to the right of the day count
+    // streak, stacked to the right of the day count; bilingual since a
+    // Japanese viewer may not parse "STREAK" alone
     const streakFontSize = 50;
-    const streakGap = 14;
-    const streakBlockHeight = streakFontSize * 2 + streakGap;
+    const streakCaptionSize = 26;
+    const streakGap = 10;
+    const streakBlockHeight = streakFontSize + streakGap + streakCaptionSize;
     const streakBlockTop = dayCountBlockTop + (dayCountBlockHeight - streakBlockHeight) / 2;
     ctx.textBaseline = 'top';
     ctx.textAlign = 'right';
     ctx.font = `${streakFontSize}px 'DotGothic16'`;
     ctx.fillStyle = BRIGHT;
     ctx.fillText(`STREAK ${derived.streak}`, W - MARGIN, streakBlockTop);
-    ctx.fillText(`BEST ${derived.longest}`, W - MARGIN, streakBlockTop + streakFontSize + streakGap);
+    ctx.font = `${streakCaptionSize}px 'DotGothic16'`;
+    ctx.fillText('連続', W - MARGIN, streakBlockTop + streakFontSize + streakGap);
     ctx.textAlign = 'left';
 
     cursorY += dayCountBlockHeight + 10;
