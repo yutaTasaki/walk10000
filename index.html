@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>1万日散歩するやつ</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bright: #39FF14;
+    --dark: #1E7A0F;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #000;
+    color: var(--bright);
+    font-family: 'DotGothic16', sans-serif;
+  }
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+  }
+  #app {
+    width: 100%;
+    max-width: 520px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  #previewCanvas {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    height: auto;
+    display: block;
+    border-radius: 20px;
+  }
+  button {
+    font-family: 'DotGothic16', sans-serif;
+    font-size: 20px;
+    padding: 16px;
+    border-radius: 12px;
+    border: 2px solid var(--bright);
+    background: #000;
+    color: var(--bright);
+    cursor: pointer;
+    width: 100%;
+  }
+  button.primary {
+    background: var(--bright);
+    color: #000;
+  }
+  button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  button.secondary {
+    border-color: var(--dark);
+    color: var(--dark);
+  }
+  #settingsLink {
+    text-align: center;
+    color: var(--dark);
+    font-size: 14px;
+    text-decoration: underline;
+    background: none;
+    border: none;
+    padding: 4px;
+  }
+  #settingsPanel {
+    display: none;
+    flex-direction: column;
+    gap: 18px;
+    border: 2px solid var(--dark);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  #settingsPanel.open { display: flex; }
+  #mainScreen {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  #app.settingsOpen > #mainScreen { display: none; }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .field h3 {
+    margin: 0;
+    font-size: 16px;
+    color: var(--bright);
+    font-weight: normal;
+  }
+  .field p.note {
+    margin: 0;
+    font-size: 12px;
+    color: var(--dark);
+  }
+  input, textarea {
+    font-family: 'DotGothic16', sans-serif;
+    background: #000;
+    color: var(--bright);
+    border: 1px solid var(--dark);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 16px;
+    width: 100%;
+  }
+  textarea {
+    min-height: 100px;
+    resize: vertical;
+  }
+  hr {
+    border: none;
+    border-top: 1px solid var(--dark);
+    width: 100%;
+  }
+  button.danger {
+    border-color: #ff4444;
+    color: #ff4444;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="mainScreen">
+    <canvas id="previewCanvas" width="1080" height="1080"></canvas>
+    <button id="btnToday" class="primary"></button>
+    <button id="btnYesterday" class="secondary">昨日の分を記録</button>
+    <button id="btnShare" class="primary">Xで投稿</button>
+    <button id="settingsLink">設定</button>
+  </div>
+
+  <div id="settingsPanel">
+    <h2 style="margin:0;">設定</h2>
+
+    <div class="field">
+      <h3>開始日の変更</h3>
+      <input type="date" id="startDateInput">
+      <button id="btnSaveStartDate">保存</button>
+    </div>
+
+    <hr>
+
+    <div class="field">
+      <h3>初期セットアップ</h3>
+      <p class="note">開始日から連続で、指定した日数分をまとめて記録済みにします。</p>
+      <input type="number" id="initialCountInput" min="0" placeholder="ここまで歩いた回数">
+      <button id="btnInitialSetup">登録</button>
+    </div>
+
+    <hr>
+
+    <div class="field">
+      <h3>データのエクスポート</h3>
+      <button id="btnExport">表示</button>
+      <textarea id="exportArea" readonly hidden></textarea>
+      <button id="btnCopyExport" hidden>コピー</button>
+    </div>
+
+    <hr>
+
+    <div class="field">
+      <h3>データのインポート</h3>
+      <textarea id="importArea" placeholder="JSONを貼り付け"></textarea>
+      <button id="btnImport">読み込む</button>
+    </div>
+
+    <hr>
+
+    <div class="field">
+      <h3>全データ削除</h3>
+      <button id="btnDeleteAll" class="danger">全データ削除</button>
+    </div>
+
+    <hr>
+
+    <button id="btnCloseSettings">閉じる</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const STORAGE_KEY = 'walk10000data';
+  const BRIGHT = '#39FF14';
+  const DARK = '#1E7A0F';
+  const UNFILLED_BORDER = '#145A0A';
+  const FUTURE = '#0B2A05';
+
+  function todayStr() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function parseDateStr(s) {
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  function formatDateStr(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function addDays(s, n) {
+    const d = parseDateStr(s);
+    d.setDate(d.getDate() + n);
+    return formatDateStr(d);
+  }
+
+  function dotDate(s) {
+    return s.replace(/-/g, '.');
+  }
+
+  function defaultData() {
+    return { startDate: todayStr(), walkedDates: [] };
+  }
+
+  function loadData() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return defaultData();
+      const parsed = JSON.parse(raw);
+      if (!parsed.startDate || !Array.isArray(parsed.walkedDates)) return defaultData();
+      return parsed;
+    } catch (e) {
+      return defaultData();
+    }
+  }
+
+  function saveData(data) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }
+
+  let data = loadData();
+
+  function computeDerived() {
+    const n = data.walkedDates.length;
+    const cardNumber = n === 0 ? 1 : Math.floor((n - 1) / 100) + 1;
+    const filledInCard = n - (cardNumber - 1) * 100;
+
+    const set = new Set(data.walkedDates);
+    const sorted = [...data.walkedDates].sort();
+    let longest = 0, current = 0, prev = null;
+    for (const d of sorted) {
+      if (prev && (parseDateStr(d) - parseDateStr(prev)) / 86400000 === 1) {
+        current += 1;
+      } else {
+        current = 1;
+      }
+      longest = Math.max(longest, current);
+      prev = d;
+    }
+
+    const today = todayStr();
+    const yesterday = addDays(today, -1);
+    let streak = 0;
+    let anchor = null;
+    if (set.has(today)) anchor = today;
+    else if (set.has(yesterday)) anchor = yesterday;
+    if (anchor) {
+      streak = 1;
+      let cursor = addDays(anchor, -1);
+      while (set.has(cursor)) {
+        streak++;
+        cursor = addDays(cursor, -1);
+      }
+    }
+
+    return { n, cardNumber, filledInCard, streak, longest, today, yesterday, todayWalked: set.has(today) };
+  }
+
+  function roundRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function drawLargeGrid(ctx, x, y, filled) {
+    const cell = 44, gap = 12;
+    for (let i = 0; i < 100; i++) {
+      const row = Math.floor(i / 10), col = i % 10;
+      const cx = x + col * (cell + gap);
+      const cy = y + row * (cell + gap);
+      if (i < filled) {
+        ctx.fillStyle = BRIGHT;
+        ctx.fillRect(cx, cy, cell, cell);
+      } else {
+        ctx.strokeStyle = UNFILLED_BORDER;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(cx + 1.5, cy + 1.5, cell - 3, cell - 3);
+      }
+    }
+    return { width: cell * 10 + gap * 9, height: cell * 10 + gap * 9 };
+  }
+
+  function drawSmallGrid(ctx, x, y, currentIndex0) {
+    const cell = 18, gap = 6;
+    let currentCellRect = null;
+    for (let i = 0; i < 100; i++) {
+      const row = Math.floor(i / 10), col = i % 10;
+      const cx = x + col * (cell + gap);
+      const cy = y + row * (cell + gap);
+      if (i < currentIndex0) {
+        ctx.fillStyle = BRIGHT;
+        ctx.fillRect(cx, cy, cell, cell);
+      } else if (i === currentIndex0) {
+        ctx.fillStyle = BRIGHT;
+        ctx.fillRect(cx, cy, cell, cell);
+        ctx.strokeStyle = BRIGHT;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(cx - 2, cy - 2, cell + 4, cell + 4);
+        currentCellRect = { x: cx, y: cy, w: cell, h: cell };
+      } else {
+        ctx.fillStyle = FUTURE;
+        ctx.fillRect(cx, cy, cell, cell);
+      }
+    }
+    return { width: cell * 10 + gap * 9, height: cell * 10 + gap * 9, currentCellRect };
+  }
+
+  function drawImage(canvas) {
+    const ctx = canvas.getContext('2d');
+    const W = 1080, H = 1080, MARGIN = 60;
+    const derived = computeDerived();
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#000';
+    roundRectPath(ctx, 0, 0, W, H, 20);
+    ctx.fill();
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = BRIGHT;
+    roundRectPath(ctx, 3, 3, W - 6, H - 6, 17);
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    let cursorY = MARGIN;
+
+    ctx.textBaseline = 'top';
+    ctx.font = "34px 'DotGothic16'";
+    ctx.fillStyle = BRIGHT;
+    ctx.fillText('1万日散歩するやつ', MARGIN, cursorY);
+    cursorY += 39 + 20;
+
+    const dayLineBaseline = cursorY + 160;
+    ctx.textBaseline = 'alphabetic';
+    let cx = MARGIN;
+    ctx.font = "165px 'DotGothic16'";
+    ctx.fillStyle = BRIGHT;
+    const nText = String(derived.n);
+    ctx.fillText(nText, cx, dayLineBaseline);
+    cx += ctx.measureText(nText).width;
+
+    ctx.font = "50px 'DotGothic16'";
+    ctx.fillStyle = BRIGHT;
+    ctx.fillText('日目', cx, dayLineBaseline);
+    cx += ctx.measureText('日目').width;
+
+    ctx.fillStyle = DARK;
+    ctx.fillText(' / 10000', cx, dayLineBaseline);
+    cursorY += 175 + 10;
+
+    ctx.textBaseline = 'top';
+    ctx.font = "34px 'DotGothic16'";
+    ctx.fillStyle = DARK;
+    ctx.fillText(`${dotDate(data.startDate)} → ${dotDate(derived.today)}`, MARGIN, cursorY);
+    cursorY += 39 + 34;
+
+    const gridY = cursorY;
+    const smallGridX = MARGIN;
+    const small = drawSmallGrid(ctx, smallGridX, gridY, derived.cardNumber - 1);
+
+    const largeGridWidth = 548;
+    const largeGridX = W - MARGIN - largeGridWidth;
+    const large = drawLargeGrid(ctx, largeGridX, gridY, derived.filledInCard);
+
+    if (small.currentCellRect) {
+      ctx.strokeStyle = DARK;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(small.currentCellRect.x + small.currentCellRect.w, small.currentCellRect.y);
+      ctx.lineTo(largeGridX, gridY);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(small.currentCellRect.x + small.currentCellRect.w, small.currentCellRect.y + small.currentCellRect.h);
+      ctx.lineTo(largeGridX, gridY + large.height);
+      ctx.stroke();
+    }
+
+    cursorY = gridY + large.height + 20;
+    ctx.font = "34px 'DotGothic16'";
+    ctx.textAlign = 'left';
+    ctx.fillStyle = DARK;
+    ctx.fillText('全100枚 = 1万日', MARGIN, cursorY);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = BRIGHT;
+    ctx.fillText(`${derived.cardNumber}枚目 = 100日`, W - MARGIN, cursorY);
+    cursorY += 39 + 20;
+
+    ctx.strokeStyle = UNFILLED_BORDER;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(MARGIN, cursorY);
+    ctx.lineTo(W - MARGIN, cursorY);
+    ctx.stroke();
+    cursorY += 24;
+
+    ctx.font = "38px 'DotGothic16'";
+    ctx.fillStyle = BRIGHT;
+    ctx.textAlign = 'left';
+    ctx.fillText(`連続 ${derived.streak}日`, MARGIN, cursorY);
+    ctx.textAlign = 'right';
+    ctx.fillText(`最長 ${derived.longest}日`, W - MARGIN, cursorY);
+
+    return derived;
+  }
+
+  const canvas = document.getElementById('previewCanvas');
+  const btnToday = document.getElementById('btnToday');
+  const btnYesterday = document.getElementById('btnYesterday');
+  const btnShare = document.getElementById('btnShare');
+
+  function render() {
+    const derived = drawImage(canvas);
+    if (derived.todayWalked) {
+      btnToday.textContent = '今日は記録済み';
+      btnToday.disabled = true;
+    } else {
+      btnToday.textContent = '今日歩いた';
+      btnToday.disabled = false;
+    }
+    const set = new Set(data.walkedDates);
+    btnYesterday.style.display = set.has(derived.yesterday) ? 'none' : 'block';
+    return derived;
+  }
+
+  function recordDate(dateStr) {
+    if (!data.walkedDates.includes(dateStr)) {
+      data.walkedDates.push(dateStr);
+      saveData(data);
+    }
+    render();
+  }
+
+  btnToday.addEventListener('click', () => recordDate(todayStr()));
+  btnYesterday.addEventListener('click', () => recordDate(addDays(todayStr(), -1)));
+
+  btnShare.addEventListener('click', async () => {
+    const derived = computeDerived();
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      const file = new File([blob], `walk10000_day${derived.n}.png`, { type: 'image/png' });
+      const shareText = `${derived.n}日目 / 10000`;
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], text: shareText });
+          return;
+        } catch (e) {
+          // user cancelled or share failed; fall through to download fallback
+        }
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }, 'image/png');
+  });
+
+  // Settings
+  const app = document.getElementById('app');
+  const settingsPanel = document.getElementById('settingsPanel');
+  const settingsLink = document.getElementById('settingsLink');
+  const btnCloseSettings = document.getElementById('btnCloseSettings');
+  const startDateInput = document.getElementById('startDateInput');
+
+  function openSettings() {
+    startDateInput.value = data.startDate;
+    app.classList.add('settingsOpen');
+    settingsPanel.classList.add('open');
+  }
+  function closeSettings() {
+    app.classList.remove('settingsOpen');
+    settingsPanel.classList.remove('open');
+    render();
+  }
+  settingsLink.addEventListener('click', openSettings);
+  btnCloseSettings.addEventListener('click', closeSettings);
+
+  document.getElementById('btnSaveStartDate').addEventListener('click', () => {
+    const v = startDateInput.value;
+    if (!v) return;
+    data.startDate = v;
+    saveData(data);
+    alert('開始日を保存しました');
+  });
+
+  document.getElementById('btnInitialSetup').addEventListener('click', () => {
+    const countInput = document.getElementById('initialCountInput');
+    const count = parseInt(countInput.value, 10);
+    if (!Number.isFinite(count) || count < 0) {
+      alert('正しい日数を入力してください');
+      return;
+    }
+    if (data.walkedDates.length > 0) {
+      if (!confirm('既存の記録が上書きされます。よろしいですか？')) return;
+    }
+    const dates = [];
+    for (let i = 0; i < count; i++) {
+      dates.push(addDays(data.startDate, i));
+    }
+    data.walkedDates = dates;
+    saveData(data);
+    alert('登録しました');
+  });
+
+  const exportArea = document.getElementById('exportArea');
+  const btnCopyExport = document.getElementById('btnCopyExport');
+  document.getElementById('btnExport').addEventListener('click', () => {
+    exportArea.value = JSON.stringify(data, null, 2);
+    exportArea.hidden = false;
+    btnCopyExport.hidden = false;
+  });
+  btnCopyExport.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(exportArea.value);
+      alert('コピーしました');
+    } catch (e) {
+      exportArea.select();
+      document.execCommand('copy');
+    }
+  });
+
+  document.getElementById('btnImport').addEventListener('click', () => {
+    const raw = document.getElementById('importArea').value;
+    try {
+      const parsed = JSON.parse(raw);
+      if (!parsed.startDate || !Array.isArray(parsed.walkedDates)) {
+        throw new Error('invalid shape');
+      }
+      data = parsed;
+      saveData(data);
+      alert('インポートしました');
+    } catch (e) {
+      alert('JSONの読み込みに失敗しました');
+    }
+  });
+
+  document.getElementById('btnDeleteAll').addEventListener('click', () => {
+    if (!confirm('全データを削除します。よろしいですか？')) return;
+    if (!confirm('本当に削除しますか？この操作は取り消せません。')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    data = defaultData();
+    alert('削除しました');
+  });
+
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(render);
+  }
+  render();
+})();
+</script>
+</body>
+</html>
