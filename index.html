@@ -561,16 +561,16 @@
     ctx.closePath();
   }
 
-  function drawLargeGrid(ctx, x, y, filled, cell = 48, gap = 12) {
+  function drawLargeGrid(ctx, x, y, filled, cell, gap, fillColor, unfilledColor) {
     for (let i = 0; i < 100; i++) {
       const row = Math.floor(i / 10), col = i % 10;
       const cx = x + col * (cell + gap);
       const cy = y + row * (cell + gap);
       if (i < filled) {
-        ctx.fillStyle = BRIGHT;
+        ctx.fillStyle = fillColor;
         ctx.fillRect(cx, cy, cell, cell);
       } else {
-        ctx.strokeStyle = UNFILLED_BORDER;
+        ctx.strokeStyle = unfilledColor;
         ctx.lineWidth = 3;
         ctx.strokeRect(cx + 1.5, cy + 1.5, cell - 3, cell - 3);
       }
@@ -578,34 +578,34 @@
     return { width: cell * 10 + gap * 9, height: cell * 10 + gap * 9 };
   }
 
-  function drawSmallGrid(ctx, x, y, currentIndex0, cell = 28, gap = 8) {
+  function drawSmallGrid(ctx, x, y, currentIndex0, cell, gap, fillColor, futureColor) {
     let currentCellRect = null;
     for (let i = 0; i < 100; i++) {
       const row = Math.floor(i / 10), col = i % 10;
       const cx = x + col * (cell + gap);
       const cy = y + row * (cell + gap);
       if (i < currentIndex0) {
-        ctx.fillStyle = BRIGHT;
+        ctx.fillStyle = fillColor;
         ctx.fillRect(cx, cy, cell, cell);
       } else if (i === currentIndex0) {
-        ctx.fillStyle = BRIGHT;
+        ctx.fillStyle = fillColor;
         ctx.fillRect(cx, cy, cell, cell);
-        ctx.strokeStyle = BRIGHT;
+        ctx.strokeStyle = fillColor;
         ctx.lineWidth = 2;
         ctx.strokeRect(cx - 2, cy - 2, cell + 4, cell + 4);
         currentCellRect = { x: cx, y: cy, w: cell, h: cell };
       } else {
-        ctx.fillStyle = FUTURE;
+        ctx.fillStyle = futureColor;
         ctx.fillRect(cx, cy, cell, cell);
       }
     }
     return { width: cell * 10 + gap * 9, height: cell * 10 + gap * 9, currentCellRect, cellSize: cell };
   }
 
-  // 100-day multiples get a lighter "card complete" effect; day 1, every
-  // 1000 days, and the 10000-day finish get the bigger "milestone" effect.
-  // Whichever it is only ever applies to the single day it lands on - by the
-  // next recorded day, n has moved past it and this returns null again.
+  // 100-day multiples get a "card complete" effect; day 1, every 1000 days,
+  // and the 10000-day finish get the bigger "milestone" effect. Whichever it
+  // is only ever applies to the single day it lands on - by the next
+  // recorded day, n has moved past it and this returns null again.
   function getMilestone(n, cardNumber) {
     if (n <= 0) return null;
     if (n === 1 || n === 10000 || n % 1000 === 0) return { type: 'special' };
@@ -618,65 +618,60 @@
     const W = 1080, H = 1080, MARGIN = 60;
     const derived = computeDerived();
     const milestone = getMilestone(derived.n, derived.cardNumber);
+    const isNormalMilestone = milestone && milestone.type === 'normal';
+    const isSpecial = milestone && milestone.type === 'special';
+
+    // special milestones invert the whole palette (bright bg, black fg) so
+    // the difference reads instantly even glancing at a timeline of images;
+    // everything below draws with these instead of the BRIGHT/DARK/etc
+    // constants directly, so this is the only branch the effect needs
+    const bg = isSpecial ? BRIGHT : '#000';
+    const fg = isSpecial ? '#000' : BRIGHT;
+    const fgDark = isSpecial ? '#0a3306' : DARK;
+    const fgUnfilled = isSpecial ? '#0a3306' : UNFILLED_BORDER;
+    const fgFuture = isSpecial ? '#1f8c0d' : FUTURE;
 
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = bg;
     roundRectPath(ctx, 0, 0, W, H, 20);
     ctx.fill();
-    ctx.strokeStyle = BRIGHT;
-    if (milestone && milestone.type === 'special') {
-      ctx.lineWidth = 10;
-      roundRectPath(ctx, 5, 5, W - 10, H - 10, 17);
-      ctx.stroke();
-      ctx.lineWidth = 5;
-      roundRectPath(ctx, 22, 22, W - 44, H - 44, 15);
-      ctx.stroke();
-    } else if (milestone && milestone.type === 'normal') {
-      ctx.lineWidth = 6;
-      roundRectPath(ctx, 3, 3, W - 6, H - 6, 17);
-      ctx.stroke();
-      ctx.lineWidth = 3;
-      roundRectPath(ctx, 16, 16, W - 32, H - 32, 15);
-      ctx.stroke();
-    } else {
-      ctx.lineWidth = 6;
-      roundRectPath(ctx, 3, 3, W - 6, H - 6, 17);
-      ctx.stroke();
-    }
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = fg;
+    roundRectPath(ctx, 3, 3, W - 6, H - 6, 17);
+    ctx.stroke();
 
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
 
-    // header row: date range (right), milestone text in the otherwise-blank
-    // left side (top-left has been empty since the title was dropped)
+    // header row: date range only, right-aligned
     const headerFontSize = 26;
     ctx.font = `${headerFontSize}px 'DotGothic16'`;
-    ctx.fillStyle = BRIGHT;
+    ctx.fillStyle = fg;
     ctx.textAlign = 'right';
     ctx.fillText(`${dotDate(data.startDate)} → ${dotDate(derived.today)}`, W - MARGIN, MARGIN);
     ctx.textAlign = 'left';
-    if (milestone && milestone.type === 'special') {
-      ctx.fillText('MILESTONE', MARGIN, MARGIN);
-    } else if (milestone && milestone.type === 'normal') {
-      ctx.fillText(`CARD ${milestone.cardNumber} COMPLETE`, MARGIN, MARGIN);
-    }
 
+    // day count: a special milestone shows only "{n} DAYS" at extra-large
+    // size (no "/ 10000" - it would just duplicate the achievement) in place
+    // of the normal row; everything else keeps the normal "{n} DAYS / 10000"
+    const digitSize = isSpecial ? 220 : 165;
+    const wordSize = isSpecial ? 60 : 50;
+    const dayCountBlockHeight = isSpecial ? 230 : 175;
     const dayCountBlockTop = MARGIN + 30 + 14;
-    const dayCountBlockHeight = 175;
-    const dayLineBaseline = dayCountBlockTop + 160;
+    const dayLineBaseline = dayCountBlockTop + (isSpecial ? 210 : 160);
     ctx.textBaseline = 'alphabetic';
     let cx = MARGIN;
-    ctx.font = "165px 'DotGothic16'";
-    ctx.fillStyle = BRIGHT;
+    ctx.font = `${digitSize}px 'DotGothic16'`;
+    ctx.fillStyle = fg;
     const nText = String(derived.n);
     ctx.fillText(nText, cx, dayLineBaseline);
     cx += ctx.measureText(nText).width;
 
-    ctx.font = "50px 'DotGothic16'";
+    ctx.font = `${wordSize}px 'DotGothic16'`;
     ctx.fillText(' DAYS', cx, dayLineBaseline);
     cx += ctx.measureText(' DAYS').width;
 
-    ctx.fillText(' / 10000', cx, dayLineBaseline);
+    if (!isSpecial) ctx.fillText(' / 10000', cx, dayLineBaseline);
 
     // today's steps/distance, stacked at the right end of the day-count row
     const todayStats = data.dailyStats[derived.today] || {};
@@ -689,29 +684,48 @@
     ctx.textBaseline = 'top';
     ctx.textAlign = 'right';
     ctx.font = `${todayFontSize}px 'DotGothic16'`;
+    ctx.fillStyle = fg;
     ctx.fillText(`${todaySteps} steps`, W - MARGIN, todayBlockTop);
     ctx.fillText(`${todayKm} km`, W - MARGIN, todayBlockTop + todayFontSize + todayGap);
     ctx.textAlign = 'left';
 
-    const isSpecial = milestone && milestone.type === 'special';
-    // the small grid grows for a special milestone (it's the star of a
-    // 1000-day checkpoint), so the large grid shrinks a little to keep both
-    // grids plus a visible funnel gap within the 960px content width
-    const largeCell = isSpecial ? 44 : 48, largeGap = 12;
+    let afterHeaderY = dayCountBlockTop + dayCountBlockHeight;
+
+    // card-complete gets an extra "CARD N COMPLETE" row (same mixed-size
+    // treatment as the day count, so the card number reads at least as big),
+    // which pushes the grid down - so the grids are drawn a bit smaller here
+    // to keep the callouts from running past the bottom margin
+    if (isNormalMilestone) {
+      const cardBaseline = afterHeaderY + 30 + 160;
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = fg;
+      let ccx = MARGIN;
+      ctx.font = "50px 'DotGothic16'";
+      ctx.fillText('CARD ', ccx, cardBaseline);
+      ccx += ctx.measureText('CARD ').width;
+      ctx.font = "165px 'DotGothic16'";
+      const cardNumText = String(milestone.cardNumber);
+      ctx.fillText(cardNumText, ccx, cardBaseline);
+      ccx += ctx.measureText(cardNumText).width;
+      ctx.font = "50px 'DotGothic16'";
+      ctx.fillText(' COMPLETE', ccx, cardBaseline);
+      afterHeaderY = cardBaseline + 15;
+    }
+
+    const largeCell = isNormalMilestone ? 32 : 48, largeGap = 12;
+    const smallCell = isNormalMilestone ? 20 : 28, smallGap = isNormalMilestone ? 7 : 8;
     const largeWidth = largeCell * 10 + largeGap * 9;
 
-    const gridY = dayCountBlockTop + dayCountBlockHeight + 30;
+    const gridY = afterHeaderY + 30;
     const largeGridLeft = W - MARGIN - largeWidth;
-    const large = drawLargeGrid(ctx, largeGridLeft, gridY, derived.filledInCard, largeCell, largeGap);
+    const large = drawLargeGrid(ctx, largeGridLeft, gridY, derived.filledInCard, largeCell, largeGap, fg, fgUnfilled);
 
     const smallGridX = MARGIN;
     const smallGridY = gridY + Math.round(large.height * 0.25);
-    const small = isSpecial
-      ? drawSmallGrid(ctx, smallGridX, smallGridY, derived.cardNumber - 1, 30, 9)
-      : drawSmallGrid(ctx, smallGridX, smallGridY, derived.cardNumber - 1);
+    const small = drawSmallGrid(ctx, smallGridX, smallGridY, derived.cardNumber - 1, smallCell, smallGap, fg, fgFuture);
 
     if (small.currentCellRect) {
-      ctx.strokeStyle = DARK;
+      ctx.strokeStyle = fgDark;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(small.currentCellRect.x + small.currentCellRect.w, small.currentCellRect.y);
@@ -729,11 +743,11 @@
     ctx.font = "40px 'DotGothic16'";
     ctx.textBaseline = 'top';
     ctx.textAlign = 'left';
-    ctx.fillStyle = BRIGHT;
+    ctx.fillStyle = fg;
 
     const smallLineX = smallGridX + small.cellSize / 2;
     const smallLineTop = smallGridY + small.height;
-    ctx.strokeStyle = DARK;
+    ctx.strokeStyle = fgDark;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(smallLineX, smallLineTop);
@@ -743,12 +757,12 @@
 
     const largeLineX = largeGridLeft + largeCell / 2;
     const largeLineTop = gridY + large.height;
-    ctx.strokeStyle = DARK;
+    ctx.strokeStyle = fgDark;
     ctx.beginPath();
     ctx.moveTo(largeLineX, largeLineTop);
     ctx.lineTo(largeLineX, largeLineTop + calloutLineLen);
     ctx.stroke();
-    ctx.fillStyle = BRIGHT;
+    ctx.fillStyle = fg;
     ctx.fillText('1 DAY', largeGridLeft, largeLineTop + calloutLineLen + calloutGap);
 
     return derived;
