@@ -69,7 +69,7 @@
     border-color: var(--dark);
     color: var(--dark);
   }
-  #settingsLink {
+  #settingsLink, #reviewLink {
     text-align: center;
     color: var(--dark);
     font-size: 14px;
@@ -85,7 +85,7 @@
   }
   #syncStatus.synced { color: var(--bright); }
   #syncStatus.error { color: #ff4444; }
-  #settingsPanel {
+  #settingsPanel, #reviewPanel {
     display: none;
     flex-direction: column;
     gap: 18px;
@@ -93,13 +93,20 @@
     border-radius: 12px;
     padding: 16px;
   }
-  #settingsPanel.open { display: flex; }
+  #settingsPanel.open, #reviewPanel.open { display: flex; }
   #mainScreen {
     display: flex;
     flex-direction: column;
     gap: 14px;
   }
-  #app.settingsOpen > #mainScreen { display: none; }
+  #app.settingsOpen > #mainScreen,
+  #app.reviewOpen > #mainScreen { display: none; }
+  .statRow {
+    display: flex;
+    justify-content: space-between;
+    font-size: 20px;
+  }
+  .statRow .label { color: var(--dark); }
   .field {
     display: flex;
     flex-direction: column;
@@ -157,7 +164,21 @@
 
     <button id="btnShare" class="primary">Xで投稿</button>
     <div id="syncStatus">-</div>
+    <button id="reviewLink">振り返り</button>
     <button id="settingsLink">設定</button>
+  </div>
+
+  <div id="reviewPanel">
+    <h2 style="margin:0;">振り返り</h2>
+
+    <div class="statRow"><span class="label">直近7日</span><span id="review7"></span></div>
+    <div class="statRow"><span class="label">直近30日</span><span id="review30"></span></div>
+    <div class="statRow"><span class="label">直近7日の歩数/距離</span><span id="reviewStats7"></span></div>
+    <div class="statRow"><span class="label">直近30日の歩数/距離</span><span id="reviewStats30"></span></div>
+
+    <hr>
+
+    <button id="btnCloseReview">閉じる</button>
   </div>
 
   <div id="settingsPanel">
@@ -491,6 +512,26 @@
     return { n, cardNumber, filledInCard, streak, longest, today, yesterday, todayWalked: set.has(today) };
   }
 
+  // Walked-day count, plus steps/distance totals where recorded, over the
+  // last `days` calendar dates (today inclusive). Independent of how often
+  // the app was actually opened - it just checks each date against the
+  // recorded walkedDates/dailyStats, same as any other derived stat.
+  function computeRecentStats(days) {
+    const set = new Set(data.walkedDates);
+    const today = todayStr();
+    let walked = 0, steps = 0, distanceM = 0;
+    for (let i = 0; i < days; i++) {
+      const d = addDays(today, -i);
+      if (set.has(d)) walked++;
+      const stats = data.dailyStats[d];
+      if (stats) {
+        if (stats.steps != null) steps += stats.steps;
+        if (stats.distanceM != null) distanceM += stats.distanceM;
+      }
+    }
+    return { walked, steps, distanceKm: distanceM / 1000 };
+  }
+
   function roundRectPath(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -784,6 +825,31 @@
   }
   settingsLink.addEventListener('click', openSettings);
   btnCloseSettings.addEventListener('click', closeSettings);
+
+  // Review
+  const reviewPanel = document.getElementById('reviewPanel');
+  const reviewLink = document.getElementById('reviewLink');
+  const btnCloseReview = document.getElementById('btnCloseReview');
+
+  function formatRecent(days) {
+    const s = computeRecentStats(days);
+    document.getElementById(`review${days}`).textContent = `${s.walked}/${days}日`;
+    document.getElementById(`reviewStats${days}`).textContent =
+      s.steps || s.distanceKm ? `${s.steps} steps / ${s.distanceKm.toFixed(1)} km` : '記録なし';
+  }
+
+  function openReview() {
+    formatRecent(7);
+    formatRecent(30);
+    app.classList.add('reviewOpen');
+    reviewPanel.classList.add('open');
+  }
+  function closeReview() {
+    app.classList.remove('reviewOpen');
+    reviewPanel.classList.remove('open');
+  }
+  reviewLink.addEventListener('click', openReview);
+  btnCloseReview.addEventListener('click', closeReview);
 
   document.getElementById('btnSaveGhToken').addEventListener('click', () => {
     const v = ghTokenInput.value.trim();
