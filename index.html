@@ -140,6 +140,14 @@
     <canvas id="previewCanvas" width="1080" height="1080"></canvas>
     <button id="btnToday" class="primary"></button>
     <button id="btnYesterday" class="secondary">昨日の分を記録</button>
+
+    <div id="todayStatsSection" class="field" style="display:none;">
+      <h3>今日の歩数・距離（任意）</h3>
+      <input type="number" id="todayStepsInput" min="0" placeholder="歩数（歩）">
+      <input type="number" id="todayDistanceInput" min="0" placeholder="距離（m）">
+      <button id="btnSaveTodayStats">保存</button>
+    </div>
+
     <button id="btnShare" class="primary">Xで投稿</button>
     <button id="settingsLink">設定</button>
   </div>
@@ -169,6 +177,17 @@
       <p class="note">実データから計算した最長連続より大きい場合だけ有効になります（記録が追いつくと自動的に上書きされます）。</p>
       <input type="number" id="bestStreakInput" min="0" placeholder="最長連続（日）">
       <button id="btnSaveBestStreak">保存</button>
+    </div>
+
+    <hr>
+
+    <div class="field">
+      <h3>歩数・距離の記録（日付指定）</h3>
+      <p class="note">日付を選ぶと、その日にすでに記録した値が表示されます。空欄で保存するとその項目は未記録になります。</p>
+      <input type="date" id="statsDateInput">
+      <input type="number" id="statsStepsInput" min="0" placeholder="歩数（歩）">
+      <input type="number" id="statsDistanceInput" min="0" placeholder="距離（m）">
+      <button id="btnSaveStats">保存</button>
     </div>
 
     <hr>
@@ -272,7 +291,14 @@
   }
 
   function defaultData() {
-    return { startDate: todayStr(), walkedDates: [] };
+    return { startDate: todayStr(), walkedDates: [], dailyStats: {} };
+  }
+
+  function normalizeData(parsed) {
+    if (!parsed.dailyStats || typeof parsed.dailyStats !== 'object') {
+      parsed.dailyStats = {};
+    }
+    return parsed;
   }
 
   function loadData() {
@@ -281,7 +307,7 @@
       if (!raw) return defaultData();
       const parsed = JSON.parse(raw);
       if (!parsed.startDate || !Array.isArray(parsed.walkedDates)) return defaultData();
-      return parsed;
+      return normalizeData(parsed);
     } catch (e) {
       return defaultData();
     }
@@ -505,6 +531,9 @@
   const btnToday = document.getElementById('btnToday');
   const btnYesterday = document.getElementById('btnYesterday');
   const btnShare = document.getElementById('btnShare');
+  const todayStatsSection = document.getElementById('todayStatsSection');
+  const todayStepsInput = document.getElementById('todayStepsInput');
+  const todayDistanceInput = document.getElementById('todayDistanceInput');
 
   function render() {
     const derived = drawImage(canvas);
@@ -517,6 +546,13 @@
     }
     const set = new Set(data.walkedDates);
     btnYesterday.style.display = set.has(derived.yesterday) ? 'none' : 'block';
+
+    todayStatsSection.style.display = derived.todayWalked ? 'flex' : 'none';
+    if (derived.todayWalked) {
+      const stats = data.dailyStats[derived.today] || {};
+      todayStepsInput.value = stats.steps != null ? stats.steps : '';
+      todayDistanceInput.value = stats.distanceM != null ? stats.distanceM : '';
+    }
     return derived;
   }
 
@@ -530,6 +566,25 @@
 
   btnToday.addEventListener('click', () => recordDate(todayStr()));
   btnYesterday.addEventListener('click', () => recordDate(addDays(todayStr(), -1)));
+
+  function setDailyStats(dateStr, steps, distanceM) {
+    const entry = {};
+    if (steps !== '' && steps != null && !Number.isNaN(steps)) entry.steps = steps;
+    if (distanceM !== '' && distanceM != null && !Number.isNaN(distanceM)) entry.distanceM = distanceM;
+    if (Object.keys(entry).length === 0) {
+      delete data.dailyStats[dateStr];
+    } else {
+      data.dailyStats[dateStr] = entry;
+    }
+    saveData(data);
+  }
+
+  document.getElementById('btnSaveTodayStats').addEventListener('click', () => {
+    const steps = todayStepsInput.value === '' ? null : parseInt(todayStepsInput.value, 10);
+    const distanceM = todayDistanceInput.value === '' ? null : parseFloat(todayDistanceInput.value);
+    setDailyStats(todayStr(), steps, distanceM);
+    alert('保存しました');
+  });
 
   function dataUrlToFile(dataUrl, filename) {
     const [header, base64] = dataUrl.split(',');
@@ -574,10 +629,21 @@
   const btnCloseSettings = document.getElementById('btnCloseSettings');
   const startDateInput = document.getElementById('startDateInput');
   const bestStreakInput = document.getElementById('bestStreakInput');
+  const statsDateInput = document.getElementById('statsDateInput');
+  const statsStepsInput = document.getElementById('statsStepsInput');
+  const statsDistanceInput = document.getElementById('statsDistanceInput');
+
+  function loadStatsFormFor(dateStr) {
+    const stats = data.dailyStats[dateStr] || {};
+    statsStepsInput.value = stats.steps != null ? stats.steps : '';
+    statsDistanceInput.value = stats.distanceM != null ? stats.distanceM : '';
+  }
 
   function openSettings() {
     startDateInput.value = data.startDate;
     bestStreakInput.value = computeDerived().longest;
+    statsDateInput.value = todayStr();
+    loadStatsFormFor(todayStr());
     app.classList.add('settingsOpen');
     settingsPanel.classList.add('open');
   }
@@ -588,6 +654,23 @@
   }
   settingsLink.addEventListener('click', openSettings);
   btnCloseSettings.addEventListener('click', closeSettings);
+
+  statsDateInput.addEventListener('change', () => {
+    if (statsDateInput.value) loadStatsFormFor(statsDateInput.value);
+  });
+
+  document.getElementById('btnSaveStats').addEventListener('click', () => {
+    const dateStr = statsDateInput.value;
+    if (!dateStr) {
+      alert('日付を選んでください');
+      return;
+    }
+    const steps = statsStepsInput.value === '' ? null : parseInt(statsStepsInput.value, 10);
+    const distanceM = statsDistanceInput.value === '' ? null : parseFloat(statsDistanceInput.value);
+    setDailyStats(dateStr, steps, distanceM);
+    if (dateStr === todayStr()) render();
+    alert('保存しました');
+  });
 
   document.getElementById('btnSaveStartDate').addEventListener('click', () => {
     const v = startDateInput.value;
@@ -652,7 +735,7 @@
       if (!parsed.startDate || !Array.isArray(parsed.walkedDates)) {
         throw new Error('invalid shape');
       }
-      data = parsed;
+      data = normalizeData(parsed);
       saveData(data);
       alert('インポートしました');
     } catch (e) {
