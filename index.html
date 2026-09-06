@@ -186,7 +186,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
+    font-size: 34px;
     line-height: 1;
     opacity: 0.4;
   }
@@ -819,7 +819,7 @@
     ctx.fillText('DAYS / 10000', MARGIN, countdownTop + 212 + 12);
 
     // right column, under "1 DAY": today's steps then distance (meters, one
-    // line each, matching the "DAYS / 10000" size), then the WAKE -> WALK
+    // line each, matching the "DAYS / 10000" size), then the BEFORE -> AFTER
     // mood emoji when both are set for today
     const todayStats = data.dailyStats[derived.today] || {};
     const todaySteps = todayStats.steps != null ? todayStats.steps : 0;
@@ -836,7 +836,7 @@
     ctx.textAlign = 'left';
 
     if (todayStats.wakeMood != null && todayStats.afterMood != null) {
-      const emojiSize = 48;
+      const emojiSize = 84;
       const wordSize = 28;
       const rowY = todayBlockTop + (todayFontSize + todayGap) * 2 + 14;
       const emojiMidY = rowY + emojiSize / 2;
@@ -844,11 +844,11 @@
       const emoji2 = MOOD_EMOJI[todayStats.afterMood];
 
       ctx.font = `${wordSize}px 'DotGothic16'`;
-      const wWake = ctx.measureText('WAKE ').width;
+      const wWake = ctx.measureText('BEFORE ').width;
       ctx.font = `${emojiSize}px 'Apple Color Emoji'`;
       const w1 = ctx.measureText(emoji1).width;
       ctx.font = `${wordSize}px 'DotGothic16'`;
-      const wArrow = ctx.measureText(' → WALK ').width;
+      const wArrow = ctx.measureText(' → AFTER ').width;
       ctx.font = `${emojiSize}px 'Apple Color Emoji'`;
       const w2 = ctx.measureText(emoji2).width;
 
@@ -856,14 +856,14 @@
       let ex = W - MARGIN - (wWake + w1 + wArrow + w2);
       ctx.font = `${wordSize}px 'DotGothic16'`;
       ctx.fillStyle = DARK;
-      ctx.fillText('WAKE ', ex, emojiMidY);
+      ctx.fillText('BEFORE ', ex, emojiMidY);
       ex += wWake;
       ctx.font = `${emojiSize}px 'Apple Color Emoji'`;
       ctx.fillText(emoji1, ex, emojiMidY);
       ex += w1;
       ctx.font = `${wordSize}px 'DotGothic16'`;
       ctx.fillStyle = BRIGHT;
-      ctx.fillText(' → WALK ', ex, emojiMidY);
+      ctx.fillText(' → AFTER ', ex, emojiMidY);
       ex += wArrow;
       ctx.font = `${emojiSize}px 'Apple Color Emoji'`;
       ctx.fillText(emoji2, ex, emojiMidY);
