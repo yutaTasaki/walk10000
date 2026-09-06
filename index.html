@@ -424,7 +424,7 @@
     // (large) label since the poster and most viewers are Japanese, with
     // STREAK as a small secondary caption for non-Japanese viewers
     const streakFontSize = 50;
-    const streakCaptionSize = 26;
+    const streakCaptionSize = 32;
     const streakGap = 10;
     const streakBlockHeight = streakFontSize + streakGap + streakCaptionSize;
     const streakBlockTop = dayCountBlockTop + (dayCountBlockHeight - streakBlockHeight) / 2;
@@ -432,7 +432,7 @@
     ctx.textAlign = 'right';
     ctx.font = `${streakFontSize}px 'DotGothic16'`;
     ctx.fillStyle = BRIGHT;
-    ctx.fillText(`連続 ${derived.streak}`, W - MARGIN, streakBlockTop);
+    ctx.fillText(`連続 ${derived.streak}日`, W - MARGIN, streakBlockTop);
     ctx.font = `${streakCaptionSize}px 'DotGothic16'`;
     ctx.fillText('STREAK', W - MARGIN, streakBlockTop + streakFontSize + streakGap);
     ctx.textAlign = 'left';
