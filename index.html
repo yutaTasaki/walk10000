@@ -561,8 +561,7 @@
     ctx.closePath();
   }
 
-  function drawLargeGrid(ctx, x, y, filled) {
-    const cell = 48, gap = 12;
+  function drawLargeGrid(ctx, x, y, filled, cell = 48, gap = 12) {
     for (let i = 0; i < 100; i++) {
       const row = Math.floor(i / 10), col = i % 10;
       const cx = x + col * (cell + gap);
@@ -579,8 +578,7 @@
     return { width: cell * 10 + gap * 9, height: cell * 10 + gap * 9 };
   }
 
-  function drawSmallGrid(ctx, x, y, currentIndex0) {
-    const cell = 28, gap = 8;
+  function drawSmallGrid(ctx, x, y, currentIndex0, cell = 28, gap = 8) {
     let currentCellRect = null;
     for (let i = 0; i < 100; i++) {
       const row = Math.floor(i / 10), col = i % 10;
@@ -601,33 +599,67 @@
         ctx.fillRect(cx, cy, cell, cell);
       }
     }
-    return { width: cell * 10 + gap * 9, height: cell * 10 + gap * 9, currentCellRect };
+    return { width: cell * 10 + gap * 9, height: cell * 10 + gap * 9, currentCellRect, cellSize: cell };
+  }
+
+  // 100-day multiples get a lighter "card complete" effect; day 1, every
+  // 1000 days, and the 10000-day finish get the bigger "milestone" effect.
+  // Whichever it is only ever applies to the single day it lands on - by the
+  // next recorded day, n has moved past it and this returns null again.
+  function getMilestone(n, cardNumber) {
+    if (n <= 0) return null;
+    if (n === 1 || n === 10000 || n % 1000 === 0) return { type: 'special' };
+    if (n % 100 === 0) return { type: 'normal', cardNumber };
+    return null;
   }
 
   function drawImage(canvas) {
     const ctx = canvas.getContext('2d');
     const W = 1080, H = 1080, MARGIN = 60;
     const derived = computeDerived();
+    const milestone = getMilestone(derived.n, derived.cardNumber);
 
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#000';
     roundRectPath(ctx, 0, 0, W, H, 20);
     ctx.fill();
-    ctx.lineWidth = 6;
     ctx.strokeStyle = BRIGHT;
-    roundRectPath(ctx, 3, 3, W - 6, H - 6, 17);
-    ctx.stroke();
+    if (milestone && milestone.type === 'special') {
+      ctx.lineWidth = 10;
+      roundRectPath(ctx, 5, 5, W - 10, H - 10, 17);
+      ctx.stroke();
+      ctx.lineWidth = 5;
+      roundRectPath(ctx, 22, 22, W - 44, H - 44, 15);
+      ctx.stroke();
+    } else if (milestone && milestone.type === 'normal') {
+      ctx.lineWidth = 6;
+      roundRectPath(ctx, 3, 3, W - 6, H - 6, 17);
+      ctx.stroke();
+      ctx.lineWidth = 3;
+      roundRectPath(ctx, 16, 16, W - 32, H - 32, 15);
+      ctx.stroke();
+    } else {
+      ctx.lineWidth = 6;
+      roundRectPath(ctx, 3, 3, W - 6, H - 6, 17);
+      ctx.stroke();
+    }
 
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
 
-    // header row: date range only, right-aligned
+    // header row: date range (right), milestone text in the otherwise-blank
+    // left side (top-left has been empty since the title was dropped)
     const headerFontSize = 26;
     ctx.font = `${headerFontSize}px 'DotGothic16'`;
     ctx.fillStyle = BRIGHT;
     ctx.textAlign = 'right';
     ctx.fillText(`${dotDate(data.startDate)} → ${dotDate(derived.today)}`, W - MARGIN, MARGIN);
     ctx.textAlign = 'left';
+    if (milestone && milestone.type === 'special') {
+      ctx.fillText('MILESTONE', MARGIN, MARGIN);
+    } else if (milestone && milestone.type === 'normal') {
+      ctx.fillText(`CARD ${milestone.cardNumber} COMPLETE`, MARGIN, MARGIN);
+    }
 
     const dayCountBlockTop = MARGIN + 30 + 14;
     const dayCountBlockHeight = 175;
@@ -661,13 +693,22 @@
     ctx.fillText(`${todayKm} km`, W - MARGIN, todayBlockTop + todayFontSize + todayGap);
     ctx.textAlign = 'left';
 
+    const isSpecial = milestone && milestone.type === 'special';
+    // the small grid grows for a special milestone (it's the star of a
+    // 1000-day checkpoint), so the large grid shrinks a little to keep both
+    // grids plus a visible funnel gap within the 960px content width
+    const largeCell = isSpecial ? 44 : 48, largeGap = 12;
+    const largeWidth = largeCell * 10 + largeGap * 9;
+
     const gridY = dayCountBlockTop + dayCountBlockHeight + 30;
-    const largeGridLeft = W - MARGIN - 588;
-    const large = drawLargeGrid(ctx, largeGridLeft, gridY, derived.filledInCard);
+    const largeGridLeft = W - MARGIN - largeWidth;
+    const large = drawLargeGrid(ctx, largeGridLeft, gridY, derived.filledInCard, largeCell, largeGap);
 
     const smallGridX = MARGIN;
     const smallGridY = gridY + Math.round(large.height * 0.25);
-    const small = drawSmallGrid(ctx, smallGridX, smallGridY, derived.cardNumber - 1);
+    const small = isSpecial
+      ? drawSmallGrid(ctx, smallGridX, smallGridY, derived.cardNumber - 1, 30, 9)
+      : drawSmallGrid(ctx, smallGridX, smallGridY, derived.cardNumber - 1);
 
     if (small.currentCellRect) {
       ctx.strokeStyle = DARK;
@@ -690,8 +731,7 @@
     ctx.textAlign = 'left';
     ctx.fillStyle = BRIGHT;
 
-    const smallCellSize = 28;
-    const smallLineX = smallGridX + smallCellSize / 2;
+    const smallLineX = smallGridX + small.cellSize / 2;
     const smallLineTop = smallGridY + small.height;
     ctx.strokeStyle = DARK;
     ctx.lineWidth = 2;
@@ -701,8 +741,7 @@
     ctx.stroke();
     ctx.fillText('100 DAYS', MARGIN, smallLineTop + calloutLineLen + calloutGap);
 
-    const largeCellSize = 48;
-    const largeLineX = largeGridLeft + largeCellSize / 2;
+    const largeLineX = largeGridLeft + largeCell / 2;
     const largeLineTop = gridY + large.height;
     ctx.strokeStyle = DARK;
     ctx.beginPath();
