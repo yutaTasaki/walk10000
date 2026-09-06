@@ -209,6 +209,38 @@
   const UNFILLED_BORDER = '#145A0A';
   const FUTURE = '#0B2A05';
 
+  // Auto-update check: GitHub Pages caches index.html for ~10 minutes, and an
+  // iOS home-screen web app often just resumes a suspended page instead of
+  // reloading it, so a fresh deploy can otherwise go unseen indefinitely.
+  // Every time the app becomes visible, compare the server's Last-Modified
+  // (fetched with a cache-busting query so no cache layer can serve a stale
+  // answer) against the last one we saw; if it changed, hard-reload.
+  const PAGE_STAMP_KEY = 'walk10000_pageStamp';
+  async function checkForUpdate() {
+    try {
+      const res = await fetch(location.pathname + '?_cb=' + Date.now(), {
+        method: 'HEAD',
+        cache: 'no-store',
+      });
+      const stamp = res.headers.get('last-modified') || res.headers.get('etag');
+      if (!stamp) return;
+      const prev = localStorage.getItem(PAGE_STAMP_KEY);
+      if (prev && prev !== stamp) {
+        localStorage.setItem(PAGE_STAMP_KEY, stamp);
+        location.replace(location.pathname + '?v=' + Date.now());
+        return;
+      }
+      localStorage.setItem(PAGE_STAMP_KEY, stamp);
+    } catch (e) {
+      // offline or request failed; keep showing the cached page
+    }
+  }
+  checkForUpdate();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForUpdate();
+  });
+  window.addEventListener('pageshow', () => checkForUpdate());
+
   function todayStr() {
     const d = new Date();
     const y = d.getFullYear();
