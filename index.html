@@ -92,7 +92,7 @@
     min-height: 1em;
   }
   #shareStatus.error { color: #ff4444; }
-  #settingsPanel, #reviewPanel {
+  #settingsPanel, #reviewPanel, #recordsPanel {
     display: none;
     flex-direction: column;
     gap: 18px;
@@ -100,14 +100,15 @@
     border-radius: 12px;
     padding: 16px;
   }
-  #settingsPanel.open, #reviewPanel.open { display: flex; }
+  #settingsPanel.open, #reviewPanel.open, #recordsPanel.open { display: flex; }
   #mainScreen {
     display: flex;
     flex-direction: column;
     gap: 14px;
   }
   #app.settingsOpen > #mainScreen,
-  #app.reviewOpen > #mainScreen { display: none; }
+  #app.reviewOpen > #mainScreen,
+  #app.recordsOpen > #mainScreen { display: none; }
   .reviewSection {
     display: flex;
     flex-direction: column;
@@ -194,6 +195,67 @@
     opacity: 1;
     border-color: var(--bright);
   }
+  .calNav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .calNav button {
+    width: auto;
+    padding: 10px 14px;
+    font-size: 16px;
+  }
+  #calMonthLabel {
+    flex: 1;
+    text-align: center;
+    font-size: 18px;
+  }
+  .calGrid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+  .calWeekday {
+    text-align: center;
+    font-size: 12px;
+    color: var(--dark);
+    padding: 2px 0;
+  }
+  .calCell {
+    aspect-ratio: 1 / 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border: 1px solid var(--dark);
+    border-radius: 6px;
+    background: none;
+    color: var(--bright);
+    font-size: 14px;
+    padding: 2px;
+  }
+  .calCell .calSteps {
+    font-size: 9px;
+    color: var(--dark);
+    line-height: 1;
+  }
+  .calCell.walked {
+    background: var(--bright);
+    color: #000;
+    border-color: var(--bright);
+  }
+  .calCell.walked .calSteps { color: #063; }
+  .calCell.disabled {
+    background: none;
+    color: #555;
+    border-color: #222;
+    cursor: default;
+  }
+  .calCell.empty {
+    border: none;
+    cursor: default;
+  }
 </style>
 </head>
 <body>
@@ -225,6 +287,7 @@
     <div id="shareStatus"></div>
     <div id="syncStatus">-</div>
     <button id="reviewLink">振り返り</button>
+    <button id="recordsLink">記録一覧</button>
     <button id="settingsLink">設定</button>
   </div>
 
@@ -262,6 +325,41 @@
     <hr>
 
     <button id="btnCloseReview">閉じる</button>
+  </div>
+
+  <div id="recordsPanel">
+    <h2 style="margin:0;">記録一覧</h2>
+
+    <div id="calView" class="reviewSection">
+      <div class="calNav">
+        <button id="calPrev" class="secondary">＜ 前月</button>
+        <div id="calMonthLabel"></div>
+        <button id="calNext" class="secondary">翌月 ＞</button>
+      </div>
+      <div class="calGrid" id="calGrid"></div>
+      <hr>
+      <button id="btnCloseRecords">閉じる</button>
+    </div>
+
+    <div id="dayEditorView" class="field" style="display:none;">
+      <h3 id="dayEditorTitle"></h3>
+
+      <div class="field">
+        <h3>起床時の気分</h3>
+        <div class="moodRow" id="editWakeMoodRow"></div>
+      </div>
+
+      <div class="field">
+        <h3>散歩後の気分</h3>
+        <div class="moodRow" id="editAfterMoodRow"></div>
+      </div>
+
+      <input type="number" id="editStepsInput" min="0" placeholder="歩数（歩）">
+      <input type="number" id="editDistanceInput" min="0" placeholder="距離（m）">
+      <button id="btnSaveDayEdit">保存</button>
+      <button id="btnDeleteDayRecord" class="danger">この日の記録を取り消す</button>
+      <button id="btnCloseDayEdit" class="secondary">戻る</button>
+    </div>
   </div>
 
   <div id="settingsPanel">
@@ -1219,6 +1317,187 @@
   }
   reviewLink.addEventListener('click', openReview);
   btnCloseReview.addEventListener('click', closeReview);
+
+  // Records (calendar day view) --------------------------------------------
+  // Lets the user tap any past day to add/edit/undo it, instead of only ever
+  // being able to record today or yesterday. Additions and edits go through
+  // the normal saveData()/scheduleSync() path (safe: they never decrease
+  // walkedDates.length, so the remote-ahead safety check can't misfire on
+  // them); only the undo action removes a day, so it uses forcePush() like
+  // the other confirmed-intentional-decrease actions (delete-all, import).
+  const recordsPanel = document.getElementById('recordsPanel');
+  const recordsLink = document.getElementById('recordsLink');
+  const btnCloseRecords = document.getElementById('btnCloseRecords');
+  const calView = document.getElementById('calView');
+  const calGrid = document.getElementById('calGrid');
+  const calMonthLabel = document.getElementById('calMonthLabel');
+  const calPrev = document.getElementById('calPrev');
+  const calNext = document.getElementById('calNext');
+  const dayEditorView = document.getElementById('dayEditorView');
+  const dayEditorTitle = document.getElementById('dayEditorTitle');
+  const editStepsInput = document.getElementById('editStepsInput');
+  const editDistanceInput = document.getElementById('editDistanceInput');
+
+  const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
+  let calYear, calMonth; // calMonth is 0-indexed
+  let editingDate = null;
+
+  const editWakeMoodButtons = buildMoodRow(document.getElementById('editWakeMoodRow'), (m) => {
+    if (!editingDate) return;
+    setMood(editingDate, 'wakeMood', m);
+    paintMoodRow(editWakeMoodButtons, m);
+    render();
+    renderCalendar();
+  });
+  const editAfterMoodButtons = buildMoodRow(document.getElementById('editAfterMoodRow'), (m) => {
+    if (!editingDate) return;
+    setMood(editingDate, 'afterMood', m);
+    paintMoodRow(editAfterMoodButtons, m);
+    render();
+    renderCalendar();
+  });
+
+  function renderCalendar() {
+    calGrid.innerHTML = '';
+    WEEKDAY_LABELS.forEach((w) => {
+      const el = document.createElement('div');
+      el.className = 'calWeekday';
+      el.textContent = w;
+      calGrid.appendChild(el);
+    });
+
+    calMonthLabel.textContent = `${calYear}.${String(calMonth + 1).padStart(2, '0')}`;
+
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    const leadBlanks = new Date(calYear, calMonth, 1).getDay();
+    const totalCells = leadBlanks + daysInMonth;
+    const trailBlanks = (7 - (totalCells % 7)) % 7;
+
+    const today = todayStr();
+    const set = new Set(data.walkedDates);
+
+    for (let i = 0; i < leadBlanks; i++) {
+      const el = document.createElement('div');
+      el.className = 'calCell empty';
+      calGrid.appendChild(el);
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = formatDateStr(new Date(calYear, calMonth, day));
+      const disabled = dateStr < data.startDate || dateStr > today;
+      const walked = set.has(dateStr);
+      const stats = data.dailyStats[dateStr];
+
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'calCell' + (walked ? ' walked' : '') + (disabled ? ' disabled' : '');
+      const num = document.createElement('div');
+      num.textContent = String(day);
+      el.appendChild(num);
+      if (stats && stats.steps != null) {
+        const s = document.createElement('div');
+        s.className = 'calSteps';
+        s.textContent = stats.steps;
+        el.appendChild(s);
+      }
+      if (disabled) {
+        el.disabled = true;
+      } else {
+        el.addEventListener('click', () => onDayTap(dateStr));
+      }
+      calGrid.appendChild(el);
+    }
+
+    for (let i = 0; i < trailBlanks; i++) {
+      const el = document.createElement('div');
+      el.className = 'calCell empty';
+      calGrid.appendChild(el);
+    }
+
+    const displayedKey = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`;
+    calNext.disabled = displayedKey >= today.slice(0, 7);
+    calPrev.disabled = displayedKey <= data.startDate.slice(0, 7);
+  }
+
+  function onDayTap(dateStr) {
+    if (data.walkedDates.includes(dateStr)) {
+      openDayEditor(dateStr);
+      return;
+    }
+    if (!confirm(`${dotDate(dateStr)} を記録済みにします。よろしいですか？`)) return;
+    data.walkedDates.push(dateStr);
+    saveData(data);
+    render();
+    renderCalendar();
+  }
+
+  function openDayEditor(dateStr) {
+    editingDate = dateStr;
+    const stats = data.dailyStats[dateStr] || {};
+    dayEditorTitle.textContent = dotDate(dateStr);
+    editStepsInput.value = stats.steps != null ? stats.steps : '';
+    editDistanceInput.value = stats.distanceM != null ? stats.distanceM : '';
+    paintMoodRow(editWakeMoodButtons, stats.wakeMood != null ? stats.wakeMood : null);
+    paintMoodRow(editAfterMoodButtons, stats.afterMood != null ? stats.afterMood : null);
+    calView.style.display = 'none';
+    dayEditorView.style.display = 'flex';
+  }
+
+  function closeDayEditor() {
+    editingDate = null;
+    dayEditorView.style.display = 'none';
+    calView.style.display = 'flex';
+  }
+
+  document.getElementById('btnSaveDayEdit').addEventListener('click', () => {
+    if (!editingDate) return;
+    const steps = editStepsInput.value === '' ? null : parseInt(editStepsInput.value, 10);
+    const distanceM = editDistanceInput.value === '' ? null : parseFloat(editDistanceInput.value);
+    setDailyStats(editingDate, steps, distanceM);
+    render();
+    renderCalendar();
+    alert('保存しました');
+  });
+
+  document.getElementById('btnDeleteDayRecord').addEventListener('click', async () => {
+    if (!editingDate) return;
+    if (!confirm(`${dotDate(editingDate)} の記録を取り消します。よろしいですか？`)) return;
+    data.walkedDates = data.walkedDates.filter((d) => d !== editingDate);
+    delete data.dailyStats[editingDate];
+    saveData(data);
+    await forcePush();
+    render();
+    closeDayEditor();
+    renderCalendar();
+  });
+
+  document.getElementById('btnCloseDayEdit').addEventListener('click', closeDayEditor);
+
+  function openRecords() {
+    const t = new Date();
+    calYear = t.getFullYear();
+    calMonth = t.getMonth();
+    closeDayEditor();
+    renderCalendar();
+    app.classList.add('recordsOpen');
+    recordsPanel.classList.add('open');
+  }
+  function closeRecords() {
+    app.classList.remove('recordsOpen');
+    recordsPanel.classList.remove('open');
+  }
+  recordsLink.addEventListener('click', openRecords);
+  btnCloseRecords.addEventListener('click', closeRecords);
+  calPrev.addEventListener('click', () => {
+    calMonth--;
+    if (calMonth < 0) { calMonth = 11; calYear--; }
+    renderCalendar();
+  });
+  calNext.addEventListener('click', () => {
+    calMonth++;
+    if (calMonth > 11) { calMonth = 0; calYear++; }
+    renderCalendar();
+  });
 
   document.getElementById('btnSaveGhToken').addEventListener('click', () => {
     const v = ghTokenInput.value.trim();
