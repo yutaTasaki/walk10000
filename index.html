@@ -356,6 +356,23 @@
     return { n, cardNumber, filledInCard, streak, longest, today, yesterday, todayWalked: set.has(today) };
   }
 
+  function computeStatsTotals() {
+    let totalSteps = 0, totalDistanceM = 0, hasSteps = false, hasDistance = false;
+    for (const key in data.dailyStats) {
+      const s = data.dailyStats[key];
+      if (s.steps != null) { totalSteps += s.steps; hasSteps = true; }
+      if (s.distanceM != null) { totalDistanceM += s.distanceM; hasDistance = true; }
+    }
+    return { totalSteps, totalDistanceM, hasSteps, hasDistance };
+  }
+
+  function formatStatLine(steps, distanceM) {
+    const parts = [];
+    if (steps != null) parts.push(`${steps}歩`);
+    if (distanceM != null) parts.push(`${(distanceM / 1000).toFixed(1)}km`);
+    return parts.join(' / ');
+  }
+
   function roundRectPath(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -427,6 +444,26 @@
     let cursorY = MARGIN;
 
     ctx.textBaseline = 'top';
+
+    const todayStats = data.dailyStats[derived.today] || {};
+    const totals = computeStatsTotals();
+    const todayLine = formatStatLine(todayStats.steps, todayStats.distanceM);
+    const totalLine = formatStatLine(
+      totals.hasSteps ? totals.totalSteps : null,
+      totals.hasDistance ? totals.totalDistanceM : null
+    );
+    const hasAnyStats = todayLine !== '' || totalLine !== '';
+
+    if (hasAnyStats) {
+      const statsFontSize = 28;
+      const statsGap = 6;
+      ctx.font = `${statsFontSize}px 'DotGothic16'`;
+      ctx.fillStyle = BRIGHT;
+      if (todayLine) ctx.fillText(`TODAY ${todayLine}`, MARGIN, cursorY);
+      cursorY += statsFontSize + statsGap;
+      if (totalLine) ctx.fillText(`TOTAL ${totalLine}`, MARGIN, cursorY);
+      cursorY = MARGIN + 70;
+    }
 
     const dayCountBlockTop = cursorY;
     const dayCountBlockHeight = 175;
