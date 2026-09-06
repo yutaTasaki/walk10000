@@ -482,7 +482,7 @@
     canvas.toBlob(async (blob) => {
       if (!blob) return;
       const file = new File([blob], `walk10000_day${derived.n}.png`, { type: 'image/png' });
-      const shareText = `${derived.n}日目 / 10000`;
+      const shareText = `【${derived.n}日目 / 10000】\n`;
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({ files: [file], text: shareText });
