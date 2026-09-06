@@ -371,7 +371,7 @@
     ctx.textBaseline = 'top';
     ctx.font = "34px 'DotGothic16'";
     ctx.fillStyle = BRIGHT;
-    ctx.fillText('1万日散歩するやつ', MARGIN, cursorY);
+    ctx.fillText('WALK 10000', MARGIN, cursorY);
     cursorY += 39 + 20;
 
     const dayCountBlockTop = cursorY;
@@ -387,8 +387,8 @@
 
     ctx.font = "50px 'DotGothic16'";
     ctx.fillStyle = BRIGHT;
-    ctx.fillText('日目', cx, dayLineBaseline);
-    cx += ctx.measureText('日目').width;
+    ctx.fillText(' DAYS', cx, dayLineBaseline);
+    cx += ctx.measureText(' DAYS').width;
 
     ctx.fillText(' / 10000', cx, dayLineBaseline);
 
@@ -401,8 +401,8 @@
     ctx.textAlign = 'right';
     ctx.font = `${streakFontSize}px 'DotGothic16'`;
     ctx.fillStyle = BRIGHT;
-    ctx.fillText(`連続 ${derived.streak}日`, W - MARGIN, streakBlockTop);
-    ctx.fillText(`最長 ${derived.longest}日`, W - MARGIN, streakBlockTop + streakFontSize + streakGap);
+    ctx.fillText(`STREAK ${derived.streak}`, W - MARGIN, streakBlockTop);
+    ctx.fillText(`BEST ${derived.longest}`, W - MARGIN, streakBlockTop + streakFontSize + streakGap);
     ctx.textAlign = 'left';
 
     cursorY += dayCountBlockHeight + 10;
@@ -440,9 +440,9 @@
     ctx.font = "38px 'DotGothic16'";
     ctx.textAlign = 'left';
     ctx.fillStyle = BRIGHT;
-    ctx.fillText('全100枚 = 1万日', MARGIN, cursorY);
+    ctx.fillText('100 SHEETS = 10000 DAYS', MARGIN, cursorY);
     ctx.textAlign = 'right';
-    ctx.fillText(`${derived.cardNumber}枚目 = 100日`, W - MARGIN, cursorY);
+    ctx.fillText(`SHEET ${derived.cardNumber} = 100 DAYS`, W - MARGIN, cursorY);
 
     return derived;
   }
