@@ -843,7 +843,7 @@
     const todayDistanceM = todayStats.distanceM != null ? todayStats.distanceM : 0;
     const todayFontSize = 60;
     const todayGap = 10;
-    const todayBlockTop = largeLabelTop + 46 + 25;
+    const todayBlockTop = largeLabelTop + 46 + 10;
     ctx.textBaseline = 'top';
     ctx.textAlign = 'right';
     ctx.font = `${todayFontSize}px 'DotGothic16'`;
@@ -856,9 +856,9 @@
       // two columns (BEFORE emoji, AFTER emoji) with a small centered label
       // above each and an arrow between; the whole block is right-aligned
       // under the "m" line, each column sized to fit its wider of label/emoji
-      const emojiSize = 72;
-      const labelSize = 24;
-      const arrowSize = 40;
+      const emojiSize = 80;
+      const labelSize = 26;
+      const arrowSize = 44;
       const colGap = 18;
       const labelGap = 8;
       const emoji1 = MOOD_EMOJI[todayStats.wakeMood];
@@ -885,7 +885,7 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.font = `${labelSize}px 'DotGothic16'`;
-      ctx.fillStyle = DARK;
+      ctx.fillStyle = BRIGHT;
       ctx.fillText('BEFORE', col1Left + col1W / 2, labelTop);
       ctx.fillText('AFTER', col2Left + col2W / 2, labelTop);
 
