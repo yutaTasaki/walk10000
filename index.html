@@ -368,7 +368,7 @@
 
   function formatStatLine(steps, distanceM) {
     const parts = [];
-    if (steps != null) parts.push(`${steps}歩`);
+    if (steps != null) parts.push(`${steps} steps`);
     if (distanceM != null) parts.push(`${(distanceM / 1000).toFixed(1)}km`);
     return parts.join(' / ');
   }
@@ -384,7 +384,7 @@
   }
 
   function drawLargeGrid(ctx, x, y, filled) {
-    const cell = 44, gap = 12;
+    const cell = 45, gap = 12;
     for (let i = 0; i < 100; i++) {
       const row = Math.floor(i / 10), col = i % 10;
       const cx = x + col * (cell + gap);
@@ -402,7 +402,7 @@
   }
 
   function drawSmallGrid(ctx, x, y, currentIndex0) {
-    const cell = 26, gap = 8;
+    const cell = 27, gap = 8;
     let currentCellRect = null;
     for (let i = 0; i < 100; i++) {
       const row = Math.floor(i / 10), col = i % 10;
@@ -441,20 +441,21 @@
     ctx.stroke();
 
     ctx.textAlign = 'left';
-    let cursorY = MARGIN;
-
     ctx.textBaseline = 'top';
 
-    // date range: a small header line at the top, ahead of the big day count
-    const dateLineFontSize = 28;
-    ctx.font = `${dateLineFontSize}px 'DotGothic16'`;
+    // header row: small title (left) + date range (right)
+    const headerFontSize = 26;
+    ctx.font = `${headerFontSize}px 'DotGothic16'`;
     ctx.fillStyle = BRIGHT;
-    ctx.fillText(`${dotDate(data.startDate)} → ${dotDate(derived.today)}`, MARGIN, cursorY);
-    cursorY += 34 + 16;
+    ctx.textAlign = 'left';
+    ctx.fillText('10000 DAYS WALK', MARGIN, MARGIN);
+    ctx.textAlign = 'right';
+    ctx.fillText(`${dotDate(data.startDate)} → ${dotDate(derived.today)}`, W - MARGIN, MARGIN);
+    ctx.textAlign = 'left';
 
-    const dayCountBlockTop = cursorY;
+    const dayCountBlockTop = MARGIN + 30 + 14;
     const dayCountBlockHeight = 175;
-    const dayLineBaseline = cursorY + 160;
+    const dayLineBaseline = dayCountBlockTop + 160;
     ctx.textBaseline = 'alphabetic';
     let cx = MARGIN;
     ctx.font = "165px 'DotGothic16'";
@@ -464,67 +465,25 @@
     cx += ctx.measureText(nText).width;
 
     ctx.font = "50px 'DotGothic16'";
-    ctx.fillStyle = BRIGHT;
     ctx.fillText(' DAYS', cx, dayLineBaseline);
     cx += ctx.measureText(' DAYS').width;
 
     ctx.fillText(' / 10000', cx, dayLineBaseline);
 
-    // right column: streak (primary, since it's the most important number to
-    // a viewer), then today's/total steps+distance, all right-aligned and
-    // top-aligned with the day count
-    const todayStats = data.dailyStats[derived.today] || {};
-    const totals = computeStatsTotals();
-    const todayLine = formatStatLine(todayStats.steps, todayStats.distanceM);
-    const totalLine = formatStatLine(
-      totals.hasSteps ? totals.totalSteps : null,
-      totals.hasDistance ? totals.totalDistanceM : null
-    );
-
-    const streakFontSize = 50;
-    const streakCaptionSize = 32;
-    const streakGap = 10;
-    const statsFontSize = 36;
-    const statsGap = 6;
-    const sectionGap = 16;
-
+    // STREAK sits at the right end of the day-count row, English only
+    const streakFontSize = 54;
     ctx.textBaseline = 'top';
     ctx.textAlign = 'right';
-    let ry = dayCountBlockTop;
     ctx.font = `${streakFontSize}px 'DotGothic16'`;
-    ctx.fillStyle = BRIGHT;
-    ctx.fillText(`連続 ${derived.streak}日`, W - MARGIN, ry);
-    ry += streakFontSize + streakGap;
-    ctx.font = `${streakCaptionSize}px 'DotGothic16'`;
-    ctx.fillText('STREAK', W - MARGIN, ry);
-    ry += streakCaptionSize;
-
-    if (todayLine || totalLine) {
-      // force below the day-count row entirely (not just below the streak
-      // block) so a wide "{n} DAYS / 10000" at 4+ digits never overlaps it
-      ry = Math.max(ry, dayCountBlockTop + dayCountBlockHeight) + sectionGap;
-      ctx.font = `${statsFontSize}px 'DotGothic16'`;
-      if (todayLine) {
-        ctx.fillText(`TODAY ${todayLine}`, W - MARGIN, ry);
-        ry += statsFontSize + statsGap;
-      }
-      if (totalLine) {
-        ctx.fillText(`TOTAL ${totalLine}`, W - MARGIN, ry);
-        ry += statsFontSize;
-      }
-    }
+    ctx.fillText(`STREAK ${derived.streak}`, W - MARGIN, dayCountBlockTop + (dayCountBlockHeight - streakFontSize) / 2);
     ctx.textAlign = 'left';
 
-    cursorY = Math.max(dayCountBlockTop + dayCountBlockHeight, ry) + 34;
-
-    const gridY = cursorY;
-    const largeGridWidth = 548;
-    const largeGridHeight = 548;
-    const largeGridX = W - MARGIN - largeGridWidth;
-    const large = drawLargeGrid(ctx, largeGridX, gridY, derived.filledInCard);
+    const gridY = dayCountBlockTop + dayCountBlockHeight + 30;
+    const largeGridLeft = W - MARGIN - 558;
+    const large = drawLargeGrid(ctx, largeGridLeft, gridY, derived.filledInCard);
 
     const smallGridX = MARGIN;
-    const smallGridY = gridY + Math.round(largeGridHeight * 0.25);
+    const smallGridY = gridY + Math.round(large.height * 0.25);
     const small = drawSmallGrid(ctx, smallGridX, smallGridY, derived.cardNumber - 1);
 
     if (small.currentCellRect) {
@@ -532,23 +491,23 @@
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(small.currentCellRect.x + small.currentCellRect.w, small.currentCellRect.y);
-      ctx.lineTo(largeGridX, gridY);
+      ctx.lineTo(largeGridLeft, gridY);
       ctx.stroke();
       ctx.beginPath();
       ctx.moveTo(small.currentCellRect.x + small.currentCellRect.w, small.currentCellRect.y + small.currentCellRect.h);
-      ctx.lineTo(largeGridX, gridY + large.height);
+      ctx.lineTo(largeGridLeft, gridY + large.height);
       ctx.stroke();
     }
 
     // callouts: a leader line from one block of each grid to what it represents
     const calloutLineLen = 16;
     const calloutGap = 10;
-    ctx.font = "38px 'DotGothic16'";
+    ctx.font = "34px 'DotGothic16'";
     ctx.textBaseline = 'top';
     ctx.textAlign = 'left';
     ctx.fillStyle = BRIGHT;
 
-    const smallCellSize = 26;
+    const smallCellSize = 27;
     const smallLineX = smallGridX + smallCellSize / 2;
     const smallLineTop = smallGridY + small.height;
     ctx.strokeStyle = DARK;
@@ -559,8 +518,8 @@
     ctx.stroke();
     ctx.fillText('100 DAYS', MARGIN, smallLineTop + calloutLineLen + calloutGap);
 
-    const largeCellSize = 44;
-    const largeLineX = largeGridX + largeCellSize / 2;
+    const largeCellSize = 45;
+    const largeLineX = largeGridLeft + largeCellSize / 2;
     const largeLineTop = gridY + large.height;
     ctx.strokeStyle = DARK;
     ctx.beginPath();
@@ -568,7 +527,31 @@
     ctx.lineTo(largeLineX, largeLineTop + calloutLineLen);
     ctx.stroke();
     ctx.fillStyle = BRIGHT;
-    ctx.fillText('1 DAY', largeGridX, largeLineTop + calloutLineLen + calloutGap);
+    ctx.fillText('1 DAY', largeGridLeft, largeLineTop + calloutLineLen + calloutGap);
+
+    // TODAY / TOTAL steps+distance, right-aligned below the "1 DAY" callout
+    const todayStats = data.dailyStats[derived.today] || {};
+    const totals = computeStatsTotals();
+    const todayLine = formatStatLine(todayStats.steps, todayStats.distanceM);
+    const totalLine = formatStatLine(
+      totals.hasSteps ? totals.totalSteps : null,
+      totals.hasDistance ? totals.totalDistanceM : null
+    );
+    if (todayLine || totalLine) {
+      const statsFontSize = 30;
+      const statsGap = 5;
+      ctx.font = `${statsFontSize}px 'DotGothic16'`;
+      ctx.textAlign = 'right';
+      let sy = largeLineTop + calloutLineLen + calloutGap + 39 + 14;
+      if (todayLine) {
+        ctx.fillText(`TODAY ${todayLine}`, W - MARGIN, sy);
+        sy += statsFontSize + statsGap;
+      }
+      if (totalLine) {
+        ctx.fillText(`TOTAL ${totalLine}`, W - MARGIN, sy);
+      }
+      ctx.textAlign = 'left';
+    }
 
     return derived;
   }
