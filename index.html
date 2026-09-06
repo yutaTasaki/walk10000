@@ -359,7 +359,7 @@
   }
 
   function drawSmallGrid(ctx, x, y, currentIndex0) {
-    const cell = 18, gap = 6;
+    const cell = 26, gap = 8;
     let currentCellRect = null;
     for (let i = 0; i < 100; i++) {
       const row = Math.floor(i / 10), col = i % 10;
@@ -468,13 +468,35 @@
       ctx.stroke();
     }
 
-    cursorY = gridY + large.height + 24;
+    // callouts: a leader line from one block of each grid to what it represents
+    const calloutLineLen = 16;
+    const calloutGap = 10;
     ctx.font = "38px 'DotGothic16'";
+    ctx.textBaseline = 'top';
     ctx.textAlign = 'left';
     ctx.fillStyle = BRIGHT;
-    ctx.fillText('100 SHEETS = 10000 DAYS', MARGIN, cursorY);
-    ctx.textAlign = 'right';
-    ctx.fillText(`SHEET ${derived.cardNumber} = 100 DAYS`, W - MARGIN, cursorY);
+
+    const smallCellSize = 26;
+    const smallLineX = smallGridX + smallCellSize / 2;
+    const smallLineTop = smallGridY + small.height;
+    ctx.strokeStyle = DARK;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(smallLineX, smallLineTop);
+    ctx.lineTo(smallLineX, smallLineTop + calloutLineLen);
+    ctx.stroke();
+    ctx.fillText('100 DAYS', MARGIN, smallLineTop + calloutLineLen + calloutGap);
+
+    const largeCellSize = 44;
+    const largeLineX = largeGridX + largeCellSize / 2;
+    const largeLineTop = gridY + large.height;
+    ctx.strokeStyle = DARK;
+    ctx.beginPath();
+    ctx.moveTo(largeLineX, largeLineTop);
+    ctx.lineTo(largeLineX, largeLineTop + calloutLineLen);
+    ctx.stroke();
+    ctx.fillStyle = BRIGHT;
+    ctx.fillText('1 DAY', largeGridX, largeLineTop + calloutLineLen + calloutGap);
 
     return derived;
   }
