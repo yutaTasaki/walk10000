@@ -445,25 +445,12 @@
 
     ctx.textBaseline = 'top';
 
-    const todayStats = data.dailyStats[derived.today] || {};
-    const totals = computeStatsTotals();
-    const todayLine = formatStatLine(todayStats.steps, todayStats.distanceM);
-    const totalLine = formatStatLine(
-      totals.hasSteps ? totals.totalSteps : null,
-      totals.hasDistance ? totals.totalDistanceM : null
-    );
-    const hasAnyStats = todayLine !== '' || totalLine !== '';
-
-    if (hasAnyStats) {
-      const statsFontSize = 28;
-      const statsGap = 6;
-      ctx.font = `${statsFontSize}px 'DotGothic16'`;
-      ctx.fillStyle = BRIGHT;
-      if (todayLine) ctx.fillText(`TODAY ${todayLine}`, MARGIN, cursorY);
-      cursorY += statsFontSize + statsGap;
-      if (totalLine) ctx.fillText(`TOTAL ${totalLine}`, MARGIN, cursorY);
-      cursorY = MARGIN + 70;
-    }
+    // date range: a small header line at the top, ahead of the big day count
+    const dateLineFontSize = 28;
+    ctx.font = `${dateLineFontSize}px 'DotGothic16'`;
+    ctx.fillStyle = BRIGHT;
+    ctx.fillText(`${dotDate(data.startDate)} → ${dotDate(derived.today)}`, MARGIN, cursorY);
+    cursorY += 34 + 16;
 
     const dayCountBlockTop = cursorY;
     const dayCountBlockHeight = 175;
@@ -483,30 +470,52 @@
 
     ctx.fillText(' / 10000', cx, dayLineBaseline);
 
-    // streak, stacked to the right of the day count; 連続 is the primary
-    // (large) label since the poster and most viewers are Japanese, with
-    // STREAK as a small secondary caption for non-Japanese viewers
+    // right column: streak (primary, since it's the most important number to
+    // a viewer), then today's/total steps+distance, all right-aligned and
+    // top-aligned with the day count
+    const todayStats = data.dailyStats[derived.today] || {};
+    const totals = computeStatsTotals();
+    const todayLine = formatStatLine(todayStats.steps, todayStats.distanceM);
+    const totalLine = formatStatLine(
+      totals.hasSteps ? totals.totalSteps : null,
+      totals.hasDistance ? totals.totalDistanceM : null
+    );
+
     const streakFontSize = 50;
     const streakCaptionSize = 32;
     const streakGap = 10;
-    const streakBlockHeight = streakFontSize + streakGap + streakCaptionSize;
-    const streakBlockTop = dayCountBlockTop + (dayCountBlockHeight - streakBlockHeight) / 2;
+    const statsFontSize = 36;
+    const statsGap = 6;
+    const sectionGap = 16;
+
     ctx.textBaseline = 'top';
     ctx.textAlign = 'right';
+    let ry = dayCountBlockTop;
     ctx.font = `${streakFontSize}px 'DotGothic16'`;
     ctx.fillStyle = BRIGHT;
-    ctx.fillText(`連続 ${derived.streak}日`, W - MARGIN, streakBlockTop);
+    ctx.fillText(`連続 ${derived.streak}日`, W - MARGIN, ry);
+    ry += streakFontSize + streakGap;
     ctx.font = `${streakCaptionSize}px 'DotGothic16'`;
-    ctx.fillText('STREAK', W - MARGIN, streakBlockTop + streakFontSize + streakGap);
+    ctx.fillText('STREAK', W - MARGIN, ry);
+    ry += streakCaptionSize;
+
+    if (todayLine || totalLine) {
+      // force below the day-count row entirely (not just below the streak
+      // block) so a wide "{n} DAYS / 10000" at 4+ digits never overlaps it
+      ry = Math.max(ry, dayCountBlockTop + dayCountBlockHeight) + sectionGap;
+      ctx.font = `${statsFontSize}px 'DotGothic16'`;
+      if (todayLine) {
+        ctx.fillText(`TODAY ${todayLine}`, W - MARGIN, ry);
+        ry += statsFontSize + statsGap;
+      }
+      if (totalLine) {
+        ctx.fillText(`TOTAL ${totalLine}`, W - MARGIN, ry);
+        ry += statsFontSize;
+      }
+    }
     ctx.textAlign = 'left';
 
-    cursorY += dayCountBlockHeight + 10;
-
-    ctx.textBaseline = 'top';
-    ctx.font = "38px 'DotGothic16'";
-    ctx.fillStyle = BRIGHT;
-    ctx.fillText(`${dotDate(data.startDate)} → ${dotDate(derived.today)}`, MARGIN, cursorY);
-    cursorY += 44 + 34;
+    cursorY = Math.max(dayCountBlockTop + dayCountBlockHeight, ry) + 34;
 
     const gridY = cursorY;
     const largeGridWidth = 548;
