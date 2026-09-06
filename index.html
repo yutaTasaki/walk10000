@@ -401,10 +401,6 @@
     let cursorY = MARGIN;
 
     ctx.textBaseline = 'top';
-    ctx.font = "34px 'DotGothic16'";
-    ctx.fillStyle = BRIGHT;
-    ctx.fillText('WALK 10000', MARGIN, cursorY);
-    cursorY += 39 + 20;
 
     const dayCountBlockTop = cursorY;
     const dayCountBlockHeight = 175;
@@ -424,8 +420,9 @@
 
     ctx.fillText(' / 10000', cx, dayLineBaseline);
 
-    // streak, stacked to the right of the day count; bilingual since a
-    // Japanese viewer may not parse "STREAK" alone
+    // streak, stacked to the right of the day count; 連続 is the primary
+    // (large) label since the poster and most viewers are Japanese, with
+    // STREAK as a small secondary caption for non-Japanese viewers
     const streakFontSize = 50;
     const streakCaptionSize = 26;
     const streakGap = 10;
@@ -435,9 +432,9 @@
     ctx.textAlign = 'right';
     ctx.font = `${streakFontSize}px 'DotGothic16'`;
     ctx.fillStyle = BRIGHT;
-    ctx.fillText(`STREAK ${derived.streak}`, W - MARGIN, streakBlockTop);
+    ctx.fillText(`連続 ${derived.streak}`, W - MARGIN, streakBlockTop);
     ctx.font = `${streakCaptionSize}px 'DotGothic16'`;
-    ctx.fillText('連続', W - MARGIN, streakBlockTop + streakFontSize + streakGap);
+    ctx.fillText('STREAK', W - MARGIN, streakBlockTop + streakFontSize + streakGap);
     ctx.textAlign = 'left';
 
     cursorY += dayCountBlockHeight + 10;
