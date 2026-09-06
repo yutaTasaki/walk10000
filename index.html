@@ -420,9 +420,26 @@
     return { startDate: todayStr(), walkedDates: [], dailyStats: {} };
   }
 
+  // Bulk initial-setup registrations never had a meaningful record time, but
+  // early builds of the app stamped recordedAt on every walked day anyway.
+  // Blank those out for anything before this app version's release so the
+  // review panel's average doesn't get skewed by fabricated timestamps.
+  const RECORDED_AT_CUTOFF = '2026-09-07';
+
   function normalizeData(parsed) {
     if (!parsed.dailyStats || typeof parsed.dailyStats !== 'object') {
       parsed.dailyStats = {};
+    }
+    let changed = false;
+    for (const dateStr in parsed.dailyStats) {
+      const entry = parsed.dailyStats[dateStr];
+      if (entry && entry.recordedAt && dateStr < RECORDED_AT_CUTOFF) {
+        entry.recordedAt = null;
+        changed = true;
+      }
+    }
+    if (changed) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed)); } catch (e) {}
     }
     return parsed;
   }
@@ -836,38 +853,52 @@
     ctx.textAlign = 'left';
 
     if (todayStats.wakeMood != null && todayStats.afterMood != null) {
-      const emojiSize = 84;
-      const wordSize = 28;
-      const rowY = todayBlockTop + (todayFontSize + todayGap) * 2 + 14;
-      const emojiMidY = rowY + emojiSize / 2;
+      // two columns (BEFORE emoji, AFTER emoji) with a small centered label
+      // above each and an arrow between; the whole block is right-aligned
+      // under the "m" line, each column sized to fit its wider of label/emoji
+      const emojiSize = 72;
+      const labelSize = 24;
+      const arrowSize = 40;
+      const colGap = 18;
+      const labelGap = 8;
       const emoji1 = MOOD_EMOJI[todayStats.wakeMood];
       const emoji2 = MOOD_EMOJI[todayStats.afterMood];
 
-      ctx.font = `${wordSize}px 'DotGothic16'`;
-      const wWake = ctx.measureText('BEFORE ').width;
       ctx.font = `${emojiSize}px 'Apple Color Emoji'`;
-      const w1 = ctx.measureText(emoji1).width;
-      ctx.font = `${wordSize}px 'DotGothic16'`;
-      const wArrow = ctx.measureText(' → AFTER ').width;
-      ctx.font = `${emojiSize}px 'Apple Color Emoji'`;
-      const w2 = ctx.measureText(emoji2).width;
+      const emojiW1 = ctx.measureText(emoji1).width;
+      const emojiW2 = ctx.measureText(emoji2).width;
+      ctx.font = `${labelSize}px 'DotGothic16'`;
+      const labelW1 = ctx.measureText('BEFORE').width;
+      const labelW2 = ctx.measureText('AFTER').width;
+      ctx.font = `${arrowSize}px 'DotGothic16'`;
+      const arrowW = ctx.measureText('→').width;
+
+      const col1W = Math.max(emojiW1, labelW1);
+      const col2W = Math.max(emojiW2, labelW2);
+      const blockWidth = col1W + colGap + arrowW + colGap + col2W;
+      const col1Left = W - MARGIN - blockWidth;
+      const col2Left = col1Left + col1W + colGap + arrowW + colGap;
+
+      const labelTop = todayBlockTop + (todayFontSize + todayGap) * 2 + 14;
+      const emojiMidY = labelTop + labelSize + labelGap + emojiSize / 2;
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.font = `${labelSize}px 'DotGothic16'`;
+      ctx.fillStyle = DARK;
+      ctx.fillText('BEFORE', col1Left + col1W / 2, labelTop);
+      ctx.fillText('AFTER', col2Left + col2W / 2, labelTop);
 
       ctx.textBaseline = 'middle';
-      let ex = W - MARGIN - (wWake + w1 + wArrow + w2);
-      ctx.font = `${wordSize}px 'DotGothic16'`;
-      ctx.fillStyle = DARK;
-      ctx.fillText('BEFORE ', ex, emojiMidY);
-      ex += wWake;
       ctx.font = `${emojiSize}px 'Apple Color Emoji'`;
-      ctx.fillText(emoji1, ex, emojiMidY);
-      ex += w1;
-      ctx.font = `${wordSize}px 'DotGothic16'`;
-      ctx.fillStyle = BRIGHT;
-      ctx.fillText(' → AFTER ', ex, emojiMidY);
-      ex += wArrow;
-      ctx.font = `${emojiSize}px 'Apple Color Emoji'`;
-      ctx.fillText(emoji2, ex, emojiMidY);
+      ctx.fillText(emoji1, col1Left + col1W / 2, emojiMidY);
+      ctx.fillText(emoji2, col2Left + col2W / 2, emojiMidY);
 
+      ctx.font = `${arrowSize}px 'DotGothic16'`;
+      ctx.fillStyle = BRIGHT;
+      ctx.fillText('→', col1Left + col1W + colGap + arrowW / 2, emojiMidY);
+
+      ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
     }
 
