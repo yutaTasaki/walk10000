@@ -175,16 +175,23 @@
   }
   .moodRow {
     display: flex;
-    gap: 8px;
+    gap: 4px;
   }
   .moodBtn {
-    flex: 1;
-    padding: 6px;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    padding: 6px 2px;
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 24px;
+    line-height: 1;
+    opacity: 0.4;
   }
   .moodBtn.selected {
+    opacity: 1;
     border-color: var(--bright);
   }
 </style>
@@ -638,39 +645,10 @@
     ctx.closePath();
   }
 
-  // Mood faces: fixed 9x9 dot-art per level, never redesigned once shipped
-  // (kept identical over time so long-term comparisons stay meaningful).
-  // [row, col] cells that are "on"; everything else is transparent.
-  const FACE_CELLS = {
-    1: [[3, 1], [3, 2], [3, 6], [3, 7], [6, 3], [6, 4], [6, 5]], // eyes closed, flat mouth
-    2: [ // sad eyebrows + dot eyes + flat mouth
-      [1, 3], [2, 2], [2, 1], [1, 5], [2, 6], [2, 7],
-      [3, 2], [3, 6],
-      [6, 3], [6, 4], [6, 5],
-    ],
-    3: [[3, 2], [3, 6], [6, 3], [6, 4], [6, 5]], // dot eyes, flat mouth
-    4: [[3, 2], [3, 6], [5, 2], [5, 6], [6, 3], [6, 4], [6, 5]], // dot eyes, corners raised
-    5: [[3, 2], [3, 6], [5, 1], [5, 7], [6, 2], [6, 6], [7, 3], [7, 4], [7, 5]], // dot eyes, wide grin
-  };
-
-  // Color reinforces the level in addition to the dot-art expression itself.
-  const MOOD_COLORS = {
-    1: '#A020F0', // purple
-    2: '#FF3B30', // red
-    3: '#FFEB3B', // yellow
-    4: '#00D9FF', // light blue
-    5: '#39FF14', // bright green
-  };
-
-  function drawFace(ctx, x, y, size, mood, color) {
-    const cells = FACE_CELLS[mood];
-    if (!cells) return;
-    const cell = size / 9;
-    ctx.fillStyle = color;
-    for (const [r, c] of cells) {
-      ctx.fillRect(x + c * cell, y + r * cell, cell, cell);
-    }
-  }
+  // Mood level -> emoji. Standard iOS emoji instead of custom dot-art, drawn
+  // via the 'Apple Color Emoji' font on both the selector buttons and the
+  // share image canvas so the two stay identical.
+  const MOOD_EMOJI = { 1: '🤢', 2: '😩', 3: '😐', 4: '🙂', 5: '😆' };
 
   function drawLargeGrid(ctx, x, y, filled, cell, gap, fillColor, unfilledColor) {
     for (let i = 0; i < 100; i++) {
@@ -799,30 +777,48 @@
     ctx.fillText(`${todayKm} km`, W - MARGIN, todayBlockTop + todayFontSize + todayGap);
     ctx.textAlign = 'left';
 
-    // wake -> after mood faces, right-aligned below steps/km; only when both
+    // WAKE -> WALK mood emoji, right-aligned below steps/km; only when both
     // are set for today, so a day with just one recorded shows neither.
-    // Size is 1.5x the steps/km text (todayFontSize), color reinforces level.
+    // Label line is small; the emoji line matches the steps/km text size.
     let rightColBottom = todayBlockTop + todayBlockHeight;
     if (todayStats.wakeMood != null && todayStats.afterMood != null) {
-      const faceSize = Math.round(todayFontSize * 1.5);
-      const arrowGap = 50;
-      const faceY = rightColBottom + 14;
-      const groupLeft = W - MARGIN - (faceSize * 2 + arrowGap);
-      drawFace(ctx, groupLeft, faceY, faceSize, todayStats.wakeMood, MOOD_COLORS[todayStats.wakeMood]);
-      const arrowY = faceY + faceSize / 2;
-      ctx.strokeStyle = BRIGHT;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(groupLeft + faceSize + 6, arrowY);
-      ctx.lineTo(groupLeft + faceSize + arrowGap - 8, arrowY);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(groupLeft + faceSize + arrowGap - 16, arrowY - 7);
-      ctx.lineTo(groupLeft + faceSize + arrowGap - 8, arrowY);
-      ctx.lineTo(groupLeft + faceSize + arrowGap - 16, arrowY + 7);
-      ctx.stroke();
-      drawFace(ctx, groupLeft + faceSize + arrowGap, faceY, faceSize, todayStats.afterMood, MOOD_COLORS[todayStats.afterMood]);
-      rightColBottom = faceY + faceSize;
+      const labelSize = 22;
+      const emojiSize = todayFontSize;
+      const arrowText = ' → ';
+
+      const labelY = rightColBottom + 10;
+      ctx.textBaseline = 'top';
+      ctx.textAlign = 'right';
+      ctx.font = `${labelSize}px 'DotGothic16'`;
+      ctx.fillStyle = DARK;
+      ctx.fillText('WAKE → WALK', W - MARGIN, labelY);
+
+      const emoji1 = MOOD_EMOJI[todayStats.wakeMood];
+      const emoji2 = MOOD_EMOJI[todayStats.afterMood];
+      ctx.font = `${emojiSize}px 'Apple Color Emoji'`;
+      const w1 = ctx.measureText(emoji1).width;
+      const w2 = ctx.measureText(emoji2).width;
+      ctx.font = "40px 'DotGothic16'";
+      const wArrow = ctx.measureText(arrowText).width;
+
+      const emojiRowTop = labelY + labelSize + 8;
+      const emojiMidY = emojiRowTop + emojiSize / 2;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      let ex = W - MARGIN - (w1 + wArrow + w2);
+      ctx.font = `${emojiSize}px 'Apple Color Emoji'`;
+      ctx.fillText(emoji1, ex, emojiMidY);
+      ex += w1;
+      ctx.font = "40px 'DotGothic16'";
+      ctx.fillStyle = BRIGHT;
+      ctx.fillText(arrowText, ex, emojiMidY);
+      ex += wArrow;
+      ctx.font = `${emojiSize}px 'Apple Color Emoji'`;
+      ctx.fillText(emoji2, ex, emojiMidY);
+
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      rightColBottom = emojiRowTop + emojiSize;
     }
 
     const gridY = Math.max(dayCountBlockTop + dayCountBlockHeight, rightColBottom) + 30;
@@ -886,22 +882,13 @@
   const todayDistanceInput = document.getElementById('todayDistanceInput');
   const afterMoodSection = document.getElementById('afterMoodSection');
 
-  const MOOD_BTN_CANVAS = 60;
-  const MOOD_BTN_FACE = 54;
-
   function buildMoodRow(rowEl, onSelect) {
     const buttons = [];
     for (let m = 1; m <= 5; m++) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'moodBtn';
-      const face = document.createElement('canvas');
-      face.width = MOOD_BTN_CANVAS;
-      face.height = MOOD_BTN_CANVAS;
-      face.style.width = MOOD_BTN_CANVAS + 'px';
-      face.style.height = MOOD_BTN_CANVAS + 'px';
-      face.dataset.mood = m;
-      btn.appendChild(face);
+      btn.textContent = MOOD_EMOJI[m];
       btn.addEventListener('click', () => onSelect(m));
       rowEl.appendChild(btn);
       buttons.push(btn);
@@ -912,15 +899,7 @@
   function paintMoodRow(buttons, selected) {
     buttons.forEach((btn, i) => {
       const mood = i + 1;
-      const isSelected = mood === selected;
-      btn.classList.toggle('selected', isSelected);
-      const face = btn.querySelector('canvas');
-      const fctx = face.getContext('2d');
-      fctx.clearRect(0, 0, MOOD_BTN_CANVAS, MOOD_BTN_CANVAS);
-      const pad = (MOOD_BTN_CANVAS - MOOD_BTN_FACE) / 2;
-      fctx.globalAlpha = isSelected ? 1 : 0.32;
-      drawFace(fctx, pad, pad, MOOD_BTN_FACE, mood, MOOD_COLORS[mood]);
-      fctx.globalAlpha = 1;
+      btn.classList.toggle('selected', mood === selected);
     });
   }
 
