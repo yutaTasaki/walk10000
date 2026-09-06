@@ -85,6 +85,13 @@
   }
   #syncStatus.synced { color: var(--bright); }
   #syncStatus.error { color: #ff4444; }
+  #shareStatus {
+    text-align: center;
+    font-size: 12px;
+    color: var(--dark);
+    min-height: 1em;
+  }
+  #shareStatus.error { color: #ff4444; }
   #settingsPanel, #reviewPanel {
     display: none;
     flex-direction: column;
@@ -101,6 +108,11 @@
   }
   #app.settingsOpen > #mainScreen,
   #app.reviewOpen > #mainScreen { display: none; }
+  .reviewSection {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
   .statRow {
     display: flex;
     justify-content: space-between;
@@ -173,7 +185,7 @@
     justify-content: center;
   }
   .moodBtn.selected {
-    background: var(--bright);
+    border-color: var(--bright);
   }
 </style>
 </head>
@@ -203,6 +215,7 @@
     </div>
 
     <button id="btnShare" class="primary">Xで投稿</button>
+    <div id="shareStatus"></div>
     <div id="syncStatus">-</div>
     <button id="reviewLink">振り返り</button>
     <button id="settingsLink">設定</button>
@@ -211,26 +224,33 @@
   <div id="reviewPanel">
     <h2 style="margin:0;">振り返り</h2>
 
-    <div class="statRow"><span class="label">7日</span><span class="value" id="review7"></span></div>
-    <div class="statRow"><span class="label">30日</span><span class="value" id="review30"></span></div>
+    <div class="reviewSection" id="reviewSectionAchieve">
+      <div class="statRow" id="reviewRow7"><span class="label">7日</span><span class="value" id="review7"></span></div>
+      <div class="statRow" id="reviewRow30"><span class="label">30日</span><span class="value" id="review30"></span></div>
+    </div>
 
-    <hr>
+    <div class="reviewSection" id="reviewSectionStats">
+      <hr>
+      <h3>歩数 / 距離</h3>
+      <div class="statRow" id="reviewStatsRow7"><span class="label">7日</span><span class="value" id="reviewStats7"></span></div>
+      <div class="statRow" id="reviewStatsRow30"><span class="label">30日</span><span class="value" id="reviewStats30"></span></div>
+    </div>
 
-    <h3>歩数 / 距離</h3>
-    <div class="statRow"><span class="label">7日</span><span class="value" id="reviewStats7"></span></div>
-    <div class="statRow"><span class="label">30日</span><span class="value" id="reviewStats30"></span></div>
+    <div class="reviewSection" id="reviewSectionMood">
+      <hr>
+      <h3>気分（起床 / 散歩後）</h3>
+      <div class="statRow" id="reviewMoodRow7"><span class="label">7日</span><span class="value" id="reviewMood7"></span></div>
+      <div class="statRow" id="reviewMoodRow30"><span class="label">30日</span><span class="value" id="reviewMood30"></span></div>
+    </div>
 
-    <hr>
+    <div class="reviewSection" id="reviewSectionTime">
+      <hr>
+      <h3>記録時刻の平均</h3>
+      <div class="statRow" id="reviewTimeRow7"><span class="label">7日</span><span class="value" id="reviewTime7"></span></div>
+      <div class="statRow" id="reviewTimeRow30"><span class="label">30日</span><span class="value" id="reviewTime30"></span></div>
+    </div>
 
-    <h3>気分（起床 / 散歩後）</h3>
-    <div class="statRow"><span class="label">7日</span><span class="value" id="reviewMood7"></span></div>
-    <div class="statRow"><span class="label">30日</span><span class="value" id="reviewMood30"></span></div>
-
-    <hr>
-
-    <h3>記録時刻の平均</h3>
-    <div class="statRow"><span class="label">7日</span><span class="value" id="reviewTime7"></span></div>
-    <div class="statRow"><span class="label">30日</span><span class="value" id="reviewTime30"></span></div>
+    <p class="note" id="reviewEmptyMsg" style="display:none;">7日分の記録が貯まると表示されます</p>
 
     <hr>
 
@@ -633,6 +653,15 @@
     5: [[3, 2], [3, 6], [5, 1], [5, 7], [6, 2], [6, 6], [7, 3], [7, 4], [7, 5]], // dot eyes, wide grin
   };
 
+  // Color reinforces the level in addition to the dot-art expression itself.
+  const MOOD_COLORS = {
+    1: '#A020F0', // purple
+    2: '#FF3B30', // red
+    3: '#FFEB3B', // yellow
+    4: '#00D9FF', // light blue
+    5: '#39FF14', // bright green
+  };
+
   function drawFace(ctx, x, y, size, mood, color) {
     const cells = FACE_CELLS[mood];
     if (!cells) return;
@@ -771,14 +800,15 @@
     ctx.textAlign = 'left';
 
     // wake -> after mood faces, right-aligned below steps/km; only when both
-    // are set for today, so a day with just one recorded shows neither
+    // are set for today, so a day with just one recorded shows neither.
+    // Size is 1.5x the steps/km text (todayFontSize), color reinforces level.
     let rightColBottom = todayBlockTop + todayBlockHeight;
     if (todayStats.wakeMood != null && todayStats.afterMood != null) {
-      const faceSize = 52;
-      const arrowGap = 40;
+      const faceSize = Math.round(todayFontSize * 1.5);
+      const arrowGap = 50;
       const faceY = rightColBottom + 14;
       const groupLeft = W - MARGIN - (faceSize * 2 + arrowGap);
-      drawFace(ctx, groupLeft, faceY, faceSize, todayStats.wakeMood, BRIGHT);
+      drawFace(ctx, groupLeft, faceY, faceSize, todayStats.wakeMood, MOOD_COLORS[todayStats.wakeMood]);
       const arrowY = faceY + faceSize / 2;
       ctx.strokeStyle = BRIGHT;
       ctx.lineWidth = 3;
@@ -791,7 +821,7 @@
       ctx.lineTo(groupLeft + faceSize + arrowGap - 8, arrowY);
       ctx.lineTo(groupLeft + faceSize + arrowGap - 16, arrowY + 7);
       ctx.stroke();
-      drawFace(ctx, groupLeft + faceSize + arrowGap, faceY, faceSize, todayStats.afterMood, BRIGHT);
+      drawFace(ctx, groupLeft + faceSize + arrowGap, faceY, faceSize, todayStats.afterMood, MOOD_COLORS[todayStats.afterMood]);
       rightColBottom = faceY + faceSize;
     }
 
@@ -856,6 +886,9 @@
   const todayDistanceInput = document.getElementById('todayDistanceInput');
   const afterMoodSection = document.getElementById('afterMoodSection');
 
+  const MOOD_BTN_CANVAS = 60;
+  const MOOD_BTN_FACE = 54;
+
   function buildMoodRow(rowEl, onSelect) {
     const buttons = [];
     for (let m = 1; m <= 5; m++) {
@@ -863,10 +896,10 @@
       btn.type = 'button';
       btn.className = 'moodBtn';
       const face = document.createElement('canvas');
-      face.width = 40;
-      face.height = 40;
-      face.style.width = '40px';
-      face.style.height = '40px';
+      face.width = MOOD_BTN_CANVAS;
+      face.height = MOOD_BTN_CANVAS;
+      face.style.width = MOOD_BTN_CANVAS + 'px';
+      face.style.height = MOOD_BTN_CANVAS + 'px';
       face.dataset.mood = m;
       btn.appendChild(face);
       btn.addEventListener('click', () => onSelect(m));
@@ -883,8 +916,11 @@
       btn.classList.toggle('selected', isSelected);
       const face = btn.querySelector('canvas');
       const fctx = face.getContext('2d');
-      fctx.clearRect(0, 0, 40, 40);
-      drawFace(fctx, 2, 2, 36, mood, isSelected ? '#000' : BRIGHT);
+      fctx.clearRect(0, 0, MOOD_BTN_CANVAS, MOOD_BTN_CANVAS);
+      const pad = (MOOD_BTN_CANVAS - MOOD_BTN_FACE) / 2;
+      fctx.globalAlpha = isSelected ? 1 : 0.32;
+      drawFace(fctx, pad, pad, MOOD_BTN_FACE, mood, MOOD_COLORS[mood]);
+      fctx.globalAlpha = 1;
     });
   }
 
@@ -905,6 +941,16 @@
     paintMoodRow(afterMoodButtons, m);
     render();
   });
+
+  // Kept in sync with every render() so btnShare can call navigator.share()
+  // immediately on click with zero work in between - generating the PNG in
+  // the click handler risked the synchronous encoding itself eating enough
+  // of iOS Safari's transient user-activation window that share() would be
+  // silently rejected.
+  let sharePngBlob = null;
+  function regenerateShareBlob() {
+    canvas.toBlob((blob) => { sharePngBlob = blob; }, 'image/png');
+  }
 
   function render() {
     const derived = drawImage(canvas);
@@ -927,6 +973,7 @@
     }
     paintMoodRow(wakeMoodButtons, todayStats.wakeMood != null ? todayStats.wakeMood : null);
     paintMoodRow(afterMoodButtons, todayStats.afterMood != null ? todayStats.afterMood : null);
+    regenerateShareBlob();
     return derived;
   }
 
@@ -982,23 +1029,13 @@
     return new File([bytes], filename, { type: mime });
   }
 
-  btnShare.addEventListener('click', async () => {
-    // Build the file synchronously (no canvas.toBlob callback) so navigator.share()
-    // fires within the same user-gesture tick as the click; iOS Safari silently
-    // rejects share() once that transient activation has expired.
-    const derived = computeDerived();
-    const file = dataUrlToFile(canvas.toDataURL('image/png'), `walk10000_day${derived.n}.png`);
-    const shareText = `【${derived.n}日目 / 10000】\n`;
+  const shareStatusEl = document.getElementById('shareStatus');
+  function setShareStatus(message, isError) {
+    shareStatusEl.textContent = message || '';
+    shareStatusEl.classList.toggle('error', !!isError);
+  }
 
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], text: shareText });
-        return;
-      } catch (e) {
-        // user cancelled or share failed; fall through to download fallback
-      }
-    }
-
+  function downloadFile(file) {
     const url = URL.createObjectURL(file);
     const a = document.createElement('a');
     a.href = url;
@@ -1007,6 +1044,40 @@
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  btnShare.addEventListener('click', async () => {
+    const derived = computeDerived();
+    const filename = `walk10000_day${derived.n}.png`;
+    const shareText = `【${derived.n}日目 / 10000】\n`;
+    // Use the blob prepared ahead of time by render(); only fall back to
+    // encoding right now (slower, and risks the activation-timing issue
+    // this whole pre-generation scheme exists to avoid) if it's not ready.
+    const file = sharePngBlob
+      ? new File([sharePngBlob], filename, { type: 'image/png' })
+      : dataUrlToFile(canvas.toDataURL('image/png'), filename);
+
+    const canShareFiles = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+    if (canShareFiles) {
+      try {
+        await navigator.share({ files: [file], text: shareText });
+        setShareStatus('');
+        return;
+      } catch (e) {
+        if (e && e.name === 'AbortError') {
+          // user closed the share sheet without picking anything; not a failure
+          setShareStatus('');
+          return;
+        }
+        console.error('navigator.share failed:', e);
+        setShareStatus(`共有に失敗しました（${e && e.message ? e.message : e}）。画像をダウンロードします。`, true);
+      }
+    } else {
+      console.warn('navigator.canShare({files}) is false on this device; downloading instead');
+      setShareStatus('この端末は画像の共有に対応していないため、ダウンロードしました。');
+    }
+
+    downloadFile(file);
   });
 
   // Settings
@@ -1053,33 +1124,73 @@
     return Math.round((parseDateStr(todayStr()) - parseDateStr(data.startDate)) / 86400000) + 1;
   }
 
-  function formatRecent(days) {
-    const dayEl = document.getElementById(`review${days}`);
-    const statsEl = document.getElementById(`reviewStats${days}`);
-    const moodEl = document.getElementById(`reviewMood${days}`);
-    const timeEl = document.getElementById(`reviewTime${days}`);
-    if (daysSinceStart() < days) {
-      const msg = `記録${days}日目から表示`;
-      dayEl.textContent = msg;
-      statsEl.textContent = msg;
-      moodEl.textContent = msg;
-      timeEl.textContent = msg;
-      return;
+  function setRowVisible(id, visible) {
+    document.getElementById(id).style.display = visible ? 'flex' : 'none';
+  }
+
+  // Rows/sections with nothing meaningful to show are hidden outright
+  // (instead of a "not enough data yet" placeholder), so the panel only
+  // ever shows rows with real content.
+  function refreshReview() {
+    const elapsed = daysSinceStart();
+    const results = { 7: elapsed >= 7 ? computeRecentStats(7) : null, 30: elapsed >= 30 ? computeRecentStats(30) : null };
+    let anyVisible = false;
+
+    for (const days of [7, 30]) {
+      const r = results[days];
+      const visible = r != null;
+      setRowVisible(`reviewRow${days}`, visible);
+      if (visible) {
+        document.getElementById(`review${days}`).textContent = `${days}日中${r.walked}日`;
+        anyVisible = true;
+      }
     }
-    const s = computeRecentStats(days);
-    dayEl.textContent = `${days}日中${s.walked}日`;
-    statsEl.textContent =
-      s.steps || s.distanceKm ? `${s.steps} steps / ${s.distanceKm.toFixed(1)} km` : '記録なし';
-    moodEl.textContent =
-      s.wakeAvg != null || s.afterAvg != null
-        ? `${s.wakeAvg != null ? s.wakeAvg.toFixed(1) : '-'} / ${s.afterAvg != null ? s.afterAvg.toFixed(1) : '-'}`
-        : '記録なし';
-    timeEl.textContent = s.timeAvgMinutes != null ? formatMinutesAsTime(s.timeAvgMinutes) : '記録なし';
+
+    let statsAny = false;
+    for (const days of [7, 30]) {
+      const r = results[days];
+      const visible = r != null && (r.steps > 0 || r.distanceKm > 0);
+      setRowVisible(`reviewStatsRow${days}`, visible);
+      if (visible) {
+        document.getElementById(`reviewStats${days}`).textContent = `${r.steps} steps / ${r.distanceKm.toFixed(1)} km`;
+        statsAny = true;
+      }
+    }
+    document.getElementById('reviewSectionStats').style.display = statsAny ? 'flex' : 'none';
+    anyVisible = anyVisible || statsAny;
+
+    let moodAny = false;
+    for (const days of [7, 30]) {
+      const r = results[days];
+      const visible = r != null && (r.wakeAvg != null || r.afterAvg != null);
+      setRowVisible(`reviewMoodRow${days}`, visible);
+      if (visible) {
+        document.getElementById(`reviewMood${days}`).textContent =
+          `${r.wakeAvg != null ? r.wakeAvg.toFixed(1) : '-'} / ${r.afterAvg != null ? r.afterAvg.toFixed(1) : '-'}`;
+        moodAny = true;
+      }
+    }
+    document.getElementById('reviewSectionMood').style.display = moodAny ? 'flex' : 'none';
+    anyVisible = anyVisible || moodAny;
+
+    let timeAny = false;
+    for (const days of [7, 30]) {
+      const r = results[days];
+      const visible = r != null && r.timeAvgMinutes != null;
+      setRowVisible(`reviewTimeRow${days}`, visible);
+      if (visible) {
+        document.getElementById(`reviewTime${days}`).textContent = formatMinutesAsTime(r.timeAvgMinutes);
+        timeAny = true;
+      }
+    }
+    document.getElementById('reviewSectionTime').style.display = timeAny ? 'flex' : 'none';
+    anyVisible = anyVisible || timeAny;
+
+    document.getElementById('reviewEmptyMsg').style.display = anyVisible ? 'none' : 'block';
   }
 
   function openReview() {
-    formatRecent(7);
-    formatRecent(30);
+    refreshReview();
     app.classList.add('reviewOpen');
     reviewPanel.classList.add('open');
   }
